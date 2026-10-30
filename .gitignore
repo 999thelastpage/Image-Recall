@@ -1,0 +1,33 @@
+# Only README.md is published among Markdown files (builder rule).
+*.md
+!README.md
+
+# Local-only context (plans, handoffs, decisions) — never pushed.
+_context/
+
+# Secrets — never commit. .env.example carries variable names only.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data & model artefacts (manifests under data/ are tracked explicitly)
+data/*
+!data/manifests/
+embeddings/
+*.npy
+*.npz
+
+# Node / build
+node_modules/
+dist/
+
+.DS_Store
