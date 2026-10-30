@@ -497,11 +497,19 @@ $('evidenceBtn').onclick = async () => {
   const out = await r.json();
   if (!r.ok){ $('enhanceStat').textContent = out.detail || 'Evidence unavailable right now.'; return; }
   $('enhanceStat').textContent = '';
+  const verdictWord = v => v === 'yes' ? 'looks right' : v === 'no' ? "doesn't look right" : "can't tell either way";
   $('evidenceLine').textContent = out.evidence.map(e => {
-    if (e.error) return `Photo ${e.image_id}: ${e.error === 'SAM returned no box' ? `I couldn't clearly find the ${e.prompt} in this one.` : e.error}`;
+    if (e.error) return `Photo ${e.image_id}: I couldn't check this one (${e.error}).`;
+    const lines = [];
+    if (e.found === false) lines.push(`I couldn't clearly find the ${e.prompt} in this photo.`);
+    else if (e.count_claimed != null && e.count_found != null)
+      lines.push(`Found ${e.count_found} × ${e.prompt} — you said ${e.count_claimed} (${e.count_found === e.count_claimed ? 'that matches' : 'different number'}).`);
+    else lines.push(`Found the ${e.prompt}${e.count_found > 1 ? ` (${e.count_found} of them)` : ''} in this photo.`);
     if (e.said && e.colour)
-      return `Photo ${e.image_id}: I found the ${e.prompt} — its colour reads ${e.colour} (you said: ${e.said}).`;
-    return `Photo ${e.image_id}: I found the ${e.prompt} in this photo (outlined it to be sure).`;
+      lines.push(`Colour reads ${e.colour} (you said: ${e.said}).`);
+    for (const [claim, v] of Object.entries(e.verdicts || {}))
+      lines.push(`“${claim}”: ${verdictWord(v)}.`);
+    return `Photo ${e.image_id}:\n  · ` + lines.join('\n  · ');
   }).join('\n');
 };
 

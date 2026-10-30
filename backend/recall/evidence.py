@@ -22,11 +22,37 @@ COLOURS: dict[str, tuple[int, int, int]] = {
 
 
 def parse_sam_box(text: str) -> dict | None:
-    m = _BOX.search(text or "")
-    if not m:
-        return None
-    x1, y1, x2, y2, w, h = (int(g) for g in m.groups())
-    return {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "w": w, "h": h}
+    boxes = parse_boxes(text)
+    return boxes[0] if boxes else None
+
+
+def parse_boxes(text: str) -> list[dict]:
+    """One box per segmented instance — len() is SAM's count."""
+    return [
+        {"x1": int(a), "y1": int(b), "x2": int(c), "y2": int(d),
+         "w": int(w), "h": int(h)}
+        for a, b, c, d, w, h in _BOX.findall(text or "")
+    ]
+
+
+_NUMBERS = {
+    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+    "twelve": 12, "couple": 2, "pair": 2,
+}
+
+
+def claimed_count(text: str) -> int | None:
+    """'two dogs' -> 2, '3 buses' -> 3, 'a dog' -> 1, else None."""
+    import re
+
+    m = re.search(r"\b(\d+)\b", text or "")
+    if m:
+        return int(m.group(1))
+    for tok in re.findall(r"[a-z]+", (text or "").lower()):
+        if tok in _NUMBERS:
+            return _NUMBERS[tok]
+    return None
 
 
 def dominant_colour(image_path: str, box: dict) -> dict:

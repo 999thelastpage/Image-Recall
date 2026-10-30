@@ -1,6 +1,20 @@
 from PIL import Image
 
-from backend.recall.evidence import dominant_colour, parse_sam_box
+from backend.recall.evidence import claimed_count, dominant_colour, parse_boxes, parse_sam_box
+
+
+def test_parse_boxes_counts_instances():
+    txt = ("<|box;x1=1;y1=2;x2=3;y2=4;w=10;h=10|><|mask;x/>"
+           "<|box;x1=5;y1=6;x2=7;y2=8;w=10;h=10|><|mask;x/>")
+    assert len(parse_boxes(txt)) == 2
+    assert parse_boxes("") == []
+
+
+def test_claimed_count():
+    assert claimed_count("two dogs") == 2
+    assert claimed_count("3 buses parked") == 3
+    assert claimed_count("a red bus") == 1
+    assert claimed_count("people eating") is None
 
 
 def test_parse_sam_box():

@@ -437,41 +437,83 @@ def rerank_session(session_id: str) -> dict:
 
 @app.post("/api/session/{session_id}/evidence")
 def session_evidence(session_id: str) -> dict:
-    """SAM evidence for the session's top-3: segment the doubted /
-    described referent and read its in-box colour."""
+    """Multi-dimension evidence for the session's top-3.
+
+    Validates what the user claimed, dimension by dimension:
+    presence + count (SAM instances), colour (in-box sampling,
+    only when a colour was claimed), and setting/activity claims
+    (Muse vision verdict per claim). Dimensions the user never
+    claimed are not reported — no colour readings for people.
+    """
     rec = _get_rec(session_id)
     s = rec["session"]
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
-    # prompt: colour clue's referent if any, else the first clue
-    colour_clues = [c for c in s.clues if c.kind == "colour"]
-    prompt = (colour_clues[0].referent if colour_clues and colour_clues[0].referent
-              else (s.clues[0].text if s.clues else "the main subject"))
-    said = colour_clues[0].text if colour_clues else None
+    from backend.recall.evidence import claimed_count, dominant_colour, parse_boxes
+
+    colour = next((c for c in s.clues if c.kind == "colour"), None)
+    count = next((c for c in s.clues if c.kind == "count"), None)
+    anchor = next((c for c in s.clues if c.kind in ("object", "person")), None)
+    prompt = (
+        (colour.referent if colour and colour.referent else None)
+        or (count.referent if count and count.referent else None)
+        or (anchor.text if anchor else None)
+        or (s.clues[0].text if s.clues else "the main subject")
+    )
+    said_colour = colour.text if colour else None
+    said_count = claimed_count(count.text) if count else None
+    if said_count is None and anchor is not None:
+        said_count = claimed_count(anchor.text)  # 'two dogs' is one clue
+    claims = [c.text for c in s.clues if c.kind in ("setting", "activity")]
     try:
-        from backend.recall.evidence import dominant_colour, parse_sam_box
-        from backend.recall.providers import SamClient
+        from backend.recall.providers import MuseClient, SamClient
 
         sam = SamClient()
+        muse = MuseClient()
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(503, f"SAM unavailable: {type(e).__name__}") from e
-    out = []
-    for cand in s.candidates[:3]:
+        raise HTTPException(503, f"evidence unavailable: {type(e).__name__}") from e
+
+    def check(cand) -> dict:
         e = entries.get(cand.image_id)
+        item: dict = {"image_id": cand.image_id, "prompt": prompt,
+                      "said": said_colour, "count_claimed": said_count}
         if e is None:
-            continue
-        item = {"image_id": cand.image_id, "prompt": prompt, "said": said}
+            item["error"] = "image unavailable"
+            return item
         try:
             got = sam.segment(e.path, prompt)
-            box = parse_sam_box(got["text"])
+            boxes = parse_boxes(got["text"])
             item["seconds"] = got["seconds"]
-            if box:
-                item.update(dominant_colour(e.path, box))
-            else:
-                item["error"] = "SAM returned no box"
+            item["found"] = len(boxes) > 0
+            item["count_found"] = len(boxes) if boxes else None
+            if boxes and said_colour:
+                item.update(dominant_colour(e.path, boxes[0]))
         except Exception as ex:  # noqa: BLE001
             item["error"] = f"{type(ex).__name__}"
-        out.append(item)
-    return {"session_id": session_id, "evidence": out}
+            return item
+        if claims:
+            try:
+                ask = ("For each statement, answer yes, no, or unsure based "
+                       "only on this photo. Return ONLY JSON like "
+                       '{"verdicts": {"<statement>": "yes|no|unsure"}}.\n'
+                       + "\n".join(f"- {c}" for c in claims))
+                txt = muse.chat_with_image(e.path, ask)
+                import json as _json
+
+                data = _json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
+                item["verdicts"] = {c: data.get("verdicts", {}).get(c, "unsure")
+                                    for c in claims}
+            except Exception:  # noqa: BLE001 — verdicts are best-effort
+                item["verdicts"] = {c: "unsure" for c in claims}
+        return item
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        out = list(ex.map(check, s.candidates[:3]))
+    return {"session_id": session_id, "evidence": out,
+            "claims_checked": {"colour": bool(colour),
+                               "count": said_count is not None,
+                               "extra": claims}}
 
 
 @app.get("/api/random")
