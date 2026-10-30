@@ -49,9 +49,8 @@ def _feats(out) -> np.ndarray:
 
 
 class MetaClipEncoder:
-    """facebook/metaclip-b32-fullcc2.5b (Meta open weights, CLIP-style
-    joint text+image space). Frozen at G0: Recall@50 0.998, 164 img/s
-    on RTX 4070. Lazy heavy imports so the package runs without torch."""
+    """MetaCLIP (Meta open weights, CLIP-style joint text+image
+    space). Lazy heavy imports so the package runs without torch."""
 
     name = ENCODER_MODEL
     is_stub = False

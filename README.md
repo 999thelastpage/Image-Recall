@@ -48,7 +48,7 @@ timings, clue chips, and rescued candidates outlined in green.
 - **SAM 3.1** (Meta Model API) segments the referred object in top
   candidates; colour/count evidence is sampled inside the mask and
   shown (“you said red — this jacket is orange”).
-- **MetaCLIP-B32** (`facebook/metaclip-b32-fullcc2.5b`, Meta open
+- **MetaCLIP-L14** (`facebook/metaclip-l14-fullcc2.5b`, Meta open
   weights) embeds images and text for exact cosine retrieval.
 - Our orchestration: leave-one-clue-out hypotheses, per-branch
   candidate union with reserved quotas, soft scoring (no hard
@@ -64,17 +64,23 @@ Gate G1 (10 hand-made wrong-colour cases, 5k corpus): branch
 union contains the target **9/10** vs plain-search Hit@5 6/10.
 
 Corpus scale vs quality (100 own-caption queries per corpus,
-`scripts/quality_check.py`):
+`scripts/quality_check.py`). Encoder upgraded B32 → L14 on
+2026-10-30 after benchmarking B32 / L14 / H14 on both scales:
 
-| Corpus | R@1 | R@5 | R@10 | R@50 | Median rank |
-|---|---|---|---|---|---|
-| 5,000 | 0.30 | 0.54 | 0.67 | 0.89 | 4 |
-| 82,783 | 0.07 | 0.17 | 0.26 | 0.48 | 56 |
+| Corpus | Encoder | R@1 | R@5 | R@10 | R@50 | Median rank |
+|---|---|---|---|---|---|---|
+| 5,000 | B32 | 0.30 | 0.54 | 0.67 | 0.89 | 4 |
+| 5,000 | L14 | 0.39 | 0.64 | 0.72 | 0.92 | 2 |
+| 82,783 | B32 | 0.07 | 0.17 | 0.26 | 0.48 | 56 |
+| 82,783 | **L14 (live)** | **0.17** | **0.32** | 0.36 | 0.53 | 48 |
 
-Plain search weakens sharply at 83k — that gap is what the repair
-loop and a stronger encoder (PE-Core-L14 / MetaCLIP-H14, same
-harness) are for. Known failure layers are tracked per result:
-parsing / candidate coverage / evidence / planning / ranking.
+L14 nearly doubles top-5 accuracy at 83k — and 0.32 is still
+weak in absolute terms. That remaining gap is what the repair
+loop, Muse reranking, and SAM evidence are for. Known failure
+layers are tracked per result: parsing / candidate coverage /
+evidence / planning / ranking. Note: MetaCLIP weights are
+CC-BY-NC (hackathon-fine); the Apache-2.0 PE-Core encoder is the
+commercial-path candidate.
 
 ## Layout
 
