@@ -140,7 +140,17 @@ class MuseClient:
                 )
         if not clues:
             raise ValueError(f"Muse returned no clues for: {description!r}")
-        return clues
+        # dedupe: drop exact repeats and chips contained in a longer chip
+        out: list[dict] = []
+        for c in clues:
+            t = c["text"].strip().lower()
+            if any(o["text"].strip().lower() == t for o in out):
+                continue
+            if any(t in o["text"].strip().lower() and len(o["text"]) > len(c["text"])
+                   for o in clues if o is not c):
+                continue
+            out.append(c)
+        return out
 
 
 class SamClient:

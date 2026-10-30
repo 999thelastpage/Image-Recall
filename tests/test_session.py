@@ -56,6 +56,14 @@ def test_doubted_anchor_is_replaced_not_dropped():
     assert s.pending.clue_index == 0
 
 
+def test_finish_explanation_when_anchor_doubted_not_replaced():
+    s = _session()
+    s.answer("red jacket")  # anchor doubt, then finish immediately
+    out = s.finish()
+    assert "didn't get a replacement" in out["explanation"]
+    assert "matched the original" not in out["explanation"]
+
+
 def test_not_sure_is_neutral():
     s = _session()
     top_before = s.candidates[0].image_id

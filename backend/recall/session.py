@@ -163,8 +163,12 @@ class SearchSession:
         elif replaced:
             why = (f"You corrected a detail to: {', '.join(replaced)}. "
                    "Results lean on the corrected interpretation.")
+        elif self.doubted_anchor is not None:
+            why = (f"You doubted '{self.clues[self.doubted_anchor].text}' but we "
+                   "didn't get a replacement, so the original ranking stands.")
         elif self.answers:
-            why = "Your answers matched the original description; no clue was dropped."
+            why = ("Your answers didn't change anything (Not sure, or they "
+                   "agreed with the original description); ranking unchanged.")
         else:
             why = "No follow-up answers; ranked by the original description and its relaxations."
         return {

@@ -1,4 +1,13 @@
-from backend.recall.clues import Clue, hypotheses, parse_fallback
+from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
+
+
+def test_dedupe_drops_contained_and_duplicate_chips():
+    clues = [Clue("train"), Clue("mini orange train"), Clue("Train"),
+             Clue("children"), Clue("riding on mini orange train")]
+    out = dedupe_clues(clues)
+    texts = [c.text for c in out]
+    assert "train" not in texts and "Train" not in texts
+    assert "mini orange train" in texts and "children" in texts
 
 
 def test_fallback_splits_on_semicolons():

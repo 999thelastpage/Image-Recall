@@ -24,6 +24,28 @@ class Hypothesis:
     dropped_index: int | None  # None for the original
 
 
+def dedupe_clues(clues: list[Clue]) -> list[Clue]:
+    """Drop exact duplicates and any clue whose text is contained
+    in a longer clue ('mini orange train' swallows 'train').
+    Order preserved; longest phrasing wins."""
+    seen: set[str] = set()
+    uniq: list[Clue] = []
+    for c in clues:
+        key = c.text.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            uniq.append(c)
+    return [
+        c for c in uniq
+        if not any(
+            c is not other
+            and c.text.strip().lower() in other.text.strip().lower()
+            and len(other.text) > len(c.text)
+            for other in uniq
+        )
+    ]
+
+
 def parse_fallback(description: str) -> list[Clue]:
     parts = [p.strip() for p in description.split(";")]
     clues = [Clue(p) for p in parts if p]

@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.recall.clues import Clue, hypotheses, parse_fallback
+from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
 from backend.recall.providers import MuseClient, ProviderDisabled, load_dotenv
@@ -284,7 +284,7 @@ def search(req: SearchRequest) -> dict:
                      if len(c["text"].strip()) > 1]  # drop filler chips
             parse_source = "Muse Spark"
         except (ProviderDisabled, Exception):
-            clues = parse_fallback(req.query)
+            clues = dedupe_clues(parse_fallback(req.query))
         timings["parse_ms"] = round((time.time() - t0) * 1000, 1)
         hyps = hypotheses(clues)
         t0 = time.time()
@@ -329,7 +329,7 @@ def create_session(req: SessionRequest) -> dict:
                  for c in chips if len(c["text"].strip()) > 1]
         source = "Muse Spark"
     except Exception:
-        clues = parse_fallback(req.query)
+        clues = dedupe_clues(parse_fallback(req.query))
         source = "fallback"
     if not clues:
         raise HTTPException(400, "could not parse any clues from that description")
