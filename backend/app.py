@@ -381,6 +381,35 @@ def finish_session(session_id: str) -> dict:
     return out
 
 
+@app.post("/api/session/{session_id}/rerank")
+def rerank_session(session_id: str) -> dict:
+    rec = _sessions.get(session_id)
+    if rec is None:
+        raise HTTPException(404, "unknown session")
+    s = rec["session"]
+    entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
+    paths = {i: e.path for i, e in entries.items()}
+    try:
+        from backend.recall.rerank import MuseReranker
+
+        out = MuseReranker(MuseClient()).rerank(s.candidates, paths, s.description)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"rerank unavailable: {type(e).__name__}") from e
+    return {
+        "session_id": session_id,
+        "reranked": True,
+        "results": [
+            {"image_id": r.image_id, "score": round(r.final, 4),
+             "encoder_score": round(r.encoder, 4),
+             "muse_score": (None if r.muse is None else round(r.muse, 2)),
+             "branches": r.branches,
+             "url": f"/api/image/{rec['corpus']}/{r.image_id}",
+             "file": Path(entries[r.image_id].path).name if r.image_id in entries else ""}
+            for r in out[:12]
+        ],
+    }
+
+
 @app.get("/api/random")
 def random_images(corpus: str = "coco_val2017", n: int = 12, seed: int = 7) -> dict:
     """Target-picker support: a deterministic pseudo-random grid.

@@ -116,12 +116,17 @@ class MuseClient:
 
     def parse(self, description: str) -> list[dict]:
         """Description -> validated clue chips [{text,kind,referent}]."""
-        txt = self._chat(
-            [
-                {"role": "system", "content": _PARSE_SYSTEM},
-                {"role": "user", "content": description},
-            ]
-        )
+        txt = ""
+        for attempt in range(2):  # reasoning models occasionally return empty
+            txt = self._chat(
+                [
+                    {"role": "system", "content": _PARSE_SYSTEM},
+                    {"role": "user", "content": description},
+                ],
+                max_tokens=2000 + 1000 * attempt,
+            )
+            if "{" in txt:
+                break
         data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
         clues = []
         for c in data.get("clues", []):
