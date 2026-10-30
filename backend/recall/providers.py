@@ -147,6 +147,8 @@ class MuseClient:
             if any(o["text"].strip().lower() == t for o in out):
                 continue
             if any(t in o["text"].strip().lower() and len(o["text"]) > len(c["text"])
+                   and (o.get("kind") == c.get("kind")
+                        or "other" in (o.get("kind"), c.get("kind")))
                    for o in clues if o is not c):
                 continue
             out.append(c)

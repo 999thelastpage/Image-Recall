@@ -39,6 +39,7 @@ def dedupe_clues(clues: list[Clue]) -> list[Clue]:
         c for c in uniq
         if not any(
             c is not other
+            and (c.kind == other.kind or "other" in (c.kind, other.kind))
             and c.text.strip().lower() in other.text.strip().lower()
             and len(other.text) > len(c.text)
             for other in uniq

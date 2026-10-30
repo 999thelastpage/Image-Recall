@@ -2,8 +2,9 @@ from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
 
 
 def test_dedupe_drops_contained_and_duplicate_chips():
-    clues = [Clue("train"), Clue("mini orange train"), Clue("Train"),
-             Clue("children"), Clue("riding on mini orange train")]
+    clues = [Clue("train", "object"), Clue("mini orange train", "object"),
+             Clue("Train", "object"), Clue("children", "person"),
+             Clue("riding on mini orange train", "activity")]
     out = dedupe_clues(clues)
     texts = [c.text for c in out]
     assert "train" not in texts and "Train" not in texts
