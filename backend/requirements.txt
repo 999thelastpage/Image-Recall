@@ -2,6 +2,7 @@ numpy>=1.26
 pytest>=8.0
 fastapi>=0.110
 uvicorn[standard]>=0.29
+python-multipart>=0.0.9
 torch>=2.3
 transformers>=4.40
 Pillow>=10.0

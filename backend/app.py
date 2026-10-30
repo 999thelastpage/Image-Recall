@@ -20,7 +20,7 @@ import uuid
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -77,24 +77,22 @@ def corpora() -> list[dict]:
     return out
 
 
-class IngestRequest(BaseModel):
-    folder: str
-    name: str
-
-
-@app.post("/api/ingest")
-def start_ingest(req: IngestRequest) -> dict:
-    folder = Path(req.folder).expanduser()
-    if not folder.is_dir():
-        raise HTTPException(400, f"folder not found: {req.folder}")
-    name = "".join(c for c in req.name if c.isalnum() or c in "-_").strip()
+def _clean_name(raw: str) -> str:
+    name = "".join(c for c in raw if c.isalnum() or c in "-_").strip()
     if not name:
         raise HTTPException(400, "give the corpus a name (letters/digits/-/_))")
+    return name
+
+
+def _new_job(name: str, folder: Path) -> dict:
     job_id = uuid.uuid4().hex[:8]
     job = {"id": job_id, "name": name, "folder": str(folder), "status": "queued",
            "done": 0, "total": 0, "images_per_sec": None, "error": None}
     _jobs[job_id] = job
+    return job
 
+
+def _spawn_ingest(job: dict, folder: Path, name: str) -> dict:
     def run() -> None:
         try:
             job["status"] = "scanning"
@@ -131,6 +129,47 @@ def start_ingest(req: IngestRequest) -> dict:
 
     threading.Thread(target=run, daemon=True).start()
     return job
+
+
+class IngestRequest(BaseModel):
+    folder: str
+    name: str
+
+
+@app.post("/api/ingest")
+def start_ingest(req: IngestRequest) -> dict:
+    folder = Path(req.folder).expanduser()
+    if not folder.is_dir():
+        raise HTTPException(400, f"folder not found: {req.folder}")
+    name = _clean_name(req.name)
+    return _spawn_ingest(_new_job(name, folder), folder, name)
+
+
+@app.post("/api/upload-ingest")
+async def upload_ingest(name: str = Form(...), files: list[UploadFile] = File(...)) -> dict:
+    """Folder picked in the browser: photos are sent to this local
+    server (127.0.0.1 only — nothing leaves the machine), stored
+    under data/uploads/<name>/, then embedded like any folder."""
+    from backend.recall.manifest import IMAGE_SUFFIXES
+
+    name = _clean_name(name)
+    dest = ROOT / "data/uploads" / name
+    dest.mkdir(parents=True, exist_ok=True)
+    saved = 0
+    for f in files:
+        raw = Path(f.filename or "").name  # basename only: no path traversal
+        if not raw or Path(raw).suffix.lower() not in IMAGE_SUFFIXES:
+            continue
+        target = dest / raw
+        n = 1
+        while target.exists():
+            target = dest / f"{Path(raw).stem}_{n}{Path(raw).suffix}"
+            n += 1
+        target.write_bytes(await f.read())
+        saved += 1
+    if not saved:
+        raise HTTPException(400, "no image files in that folder")
+    return _spawn_ingest(_new_job(name, dest), dest, name)
 
 
 @app.get("/api/ingest/{job_id}")

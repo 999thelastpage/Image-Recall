@@ -68,16 +68,21 @@
   <div>
     <section class="panel">
       <h2>1 · Add a photo folder</h2>
-      <label>Folder on this machine</label>
-      <input type="text" id="folder" placeholder="/home/you/Pictures/holiday">
       <label>Corpus name</label>
       <input type="text" id="cname" placeholder="holiday">
       <div class="row" style="margin-top:12px">
-        <button id="ingestBtn">Process folder</button>
-        <span class="stat" id="ingestStat"></span>
+        <button id="pickBtn">Choose folder…</button>
+        <span class="stat" id="pickStat">No folder chosen</span>
       </div>
+      <input type="file" id="dirPicker" webkitdirectory multiple hidden>
       <progress id="ingestBar" value="0" max="100" hidden></progress>
-      <p class="stat" id="ingestMsg">Embeds every image locally (~150/s on GPU). Nothing is uploaded.</p>
+      <p class="stat" id="ingestMsg">Photos go to this local server only (127.0.0.1) and are embedded there (~150/s on GPU). Nothing leaves this machine.</p>
+      <details>
+        <summary class="stat">Or paste a server-side path instead</summary>
+        <label>Folder on this machine</label>
+        <input type="text" id="folder" placeholder="/home/you/Pictures/holiday">
+        <div class="row" style="margin-top:8px"><button class="ghost" id="pathBtn">Process this path</button></div>
+      </details>
     </section>
     <section class="panel">
       <h2>2 · Ask in plain language</h2>
@@ -129,29 +134,63 @@ $('modeSeg').onclick = e => {
     [...$('modeSeg').children].forEach(b => b.classList.toggle('on', b.dataset.mode === mode)); }
 };
 
-$('ingestBtn').onclick = async () => {
-  $('err').textContent = '';
-  const body = {folder: $('folder').value.trim(), name: $('cname').value.trim()};
-  if (!body.folder || !body.name){ $('err').textContent = 'Give a folder path and a corpus name.'; return; }
-  $('ingestBtn').disabled = true;
-  const r = await fetch('/api/ingest', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  const job = await r.json();
-  if (!r.ok){ $('err').textContent = job.detail || 'ingest failed'; $('ingestBtn').disabled = false; return; }
+function pollJob(job){
   $('ingestBar').hidden = false;
   jobTimer = setInterval(async () => {
     const j = await (await fetch('/api/ingest/' + job.id)).json();
     const pct = j.total ? Math.round(100 * j.done / j.total) : 0;
     $('ingestBar').value = pct;
-    $('ingestStat').textContent = `${j.status} ${j.done}/${j.total || '?'}`;
+    $('pickStat').textContent = `${j.status} ${j.done}/${j.total || '?'}`;
     if (j.status === 'done'){
-      clearInterval(jobTimer); $('ingestBtn').disabled = false;
+      clearInterval(jobTimer); $('pickBtn').disabled = false;
       $('ingestMsg').innerHTML = `Done: <b>${j.name}</b> — ${j.total} photos at ${j.images_per_sec} img/s. Selected above, ready to query.`;
       loadCorpora(j.name);
     } else if (j.status === 'error'){
-      clearInterval(jobTimer); $('ingestBtn').disabled = false;
+      clearInterval(jobTimer); $('pickBtn').disabled = false;
       $('err').textContent = j.error || 'ingest error';
     }
   }, 600);
+}
+
+function needName(){
+  const n = $('cname').value.trim();
+  if (!n){ $('err').textContent = 'Give the corpus a name first, then choose the folder.'; $('cname').focus(); return null; }
+  return n;
+}
+
+$('pickBtn').onclick = () => { if (needName()) $('dirPicker').click(); };
+
+$('dirPicker').onchange = () => {
+  const name = needName(); if (!name) return;
+  const files = [...$('dirPicker').files].filter(f => /\.(jpe?g|png|webp|bmp)$/i.test(f.name));
+  if (!files.length){ $('err').textContent = 'No image files in that folder.'; return; }
+  $('err').textContent = ''; $('pickBtn').disabled = true;
+  $('pickStat').textContent = `sending ${files.length} photos to local server…`;
+  $('ingestBar').hidden = false; $('ingestBar').value = 0;
+  const fd = new FormData();
+  fd.append('name', name);
+  files.forEach(f => fd.append('files', f, f.name));
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/upload-ingest');
+  xhr.upload.onprogress = e => { if (e.lengthComputable) $('ingestBar').value = Math.round(100 * e.loaded / e.total); };
+  xhr.onload = () => {
+    if (xhr.status >= 400){ $('err').textContent = (JSON.parse(xhr.responseText).detail) || 'upload failed'; $('pickBtn').disabled = false; return; }
+    pollJob(JSON.parse(xhr.responseText));
+  };
+  xhr.onerror = () => { $('err').textContent = 'upload failed'; $('pickBtn').disabled = false; };
+  xhr.send(fd);
+};
+
+$('pathBtn').onclick = async () => {
+  $('err').textContent = '';
+  const name = needName(); if (!name) return;
+  const folder = $('folder').value.trim();
+  if (!folder){ $('err').textContent = 'Paste a folder path first.'; return; }
+  $('pickBtn').disabled = true;
+  const r = await fetch('/api/ingest', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({folder, name})});
+  const job = await r.json();
+  if (!r.ok){ $('err').textContent = job.detail || 'ingest failed'; $('pickBtn').disabled = false; return; }
+  pollJob(job);
 };
 
 function card(it, rank, rescued){
