@@ -204,13 +204,17 @@ class SearchSession:
         self.status = "done"
         top = self.candidates[:5]
         dropped_texts = [self.clues[i].text for i in sorted(self.dropped)]
-        replaced = [a.value for a in self.answers
-                    if a.kind == "attribute" and a.value != NOT_SURE]
+        replaced = [
+            f"'{self.clues[a.clue_index].text}' → '{a.value}'"
+            if a.clue_index is not None else f"'{a.value}'"
+            for a in self.answers
+            if a.kind == "attribute" and a.value != NOT_SURE
+        ]
         if dropped_texts:
             why = (f"After your answers we doubted: {', '.join(dropped_texts)}. "
                    "Results lean on the interpretations without them.")
         elif replaced:
-            why = (f"You corrected a detail to: {', '.join(replaced)}. "
+            why = (f"You corrected: {'; '.join(replaced)}. "
                    "Results lean on the corrected interpretation.")
         elif self.doubted_anchor is not None:
             why = (f"You doubted '{self.clues[self.doubted_anchor].text}' but we "

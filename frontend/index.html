@@ -497,9 +497,12 @@ $('evidenceBtn').onclick = async () => {
   const out = await r.json();
   if (!r.ok){ $('enhanceStat').textContent = out.detail || 'Evidence unavailable right now.'; return; }
   $('enhanceStat').textContent = '';
-  $('evidenceLine').textContent = out.evidence.map(e =>
-    e.colour ? `Photo ${e.image_id}: I found the ${e.prompt} — its colour reads ${e.colour} (you said: ${e.said ?? '—'}).`
-             : `Photo ${e.image_id}: ${e.error || 'no clear view of it'}`).join('\n');
+  $('evidenceLine').textContent = out.evidence.map(e => {
+    if (e.error) return `Photo ${e.image_id}: ${e.error === 'SAM returned no box' ? `I couldn't clearly find the ${e.prompt} in this one.` : e.error}`;
+    if (e.said && e.colour)
+      return `Photo ${e.image_id}: I found the ${e.prompt} — its colour reads ${e.colour} (you said: ${e.said}).`;
+    return `Photo ${e.image_id}: I found the ${e.prompt} in this photo (outlined it to be sure).`;
+  }).join('\n');
 };
 
 loadCorpora();

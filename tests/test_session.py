@@ -56,6 +56,14 @@ def test_doubted_anchor_is_replaced_not_dropped():
     assert s.pending.clue_index == 0
 
 
+def test_finish_explanation_shows_correction_as_from_to():
+    s = _session()
+    s.answer("red jacket")          # doubt the anchor
+    s.answer("orange jacket")       # replace it (attribute answer)
+    out = s.finish()
+    assert "'red jacket' → 'orange jacket'" in out["explanation"]
+
+
 def test_finish_explanation_when_anchor_doubted_not_replaced():
     s = _session()
     s.answer("red jacket")  # anchor doubt, then finish immediately
