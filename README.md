@@ -63,6 +63,13 @@ chips. SAM 3.1: exact box in 1.8s.
 Gate G1 (10 hand-made wrong-colour cases, 5k corpus): branch
 union contains the target **9/10** vs plain-search Hit@5 6/10.
 
+Gate G2 (30 cases: 10 wrong-colour, 10 wrong-object, 10
+accurate; simulated truthful user, ≤3 questions): wrong-clue
+Hit@5 **10/20 → 13/20** after the session loop. Colour repair
+5→8. A first run failed (9/20) because dropping the main object
+noun destroys a query; the shipped rule is now *modifiers are
+dropped, anchors are replaced*, with a regression test.
+
 Corpus scale vs quality (100 own-caption queries per corpus,
 `scripts/quality_check.py`). Encoder upgraded B32 → L14 on
 2026-10-30 after benchmarking B32 / L14 / H14 on both scales:
@@ -101,9 +108,18 @@ only by offline scoring scripts), hosted providers off without
 credentials, generated images always labelled. Failures are
 reported with their layer, not hidden.
 
-## Next
+## Status & next
 
-Day 2: question engine + SAM evidence in the loop, Race view
-(rank climbing live), 30-case Gate G2. Day 3: hosted demo, video,
-submission. Ingest-speed work (reduced-resolution dataset +
-parallel pipeline) is designed and parked pending evaluation.
+Done: G0 (API + encoder gates), Day 1 engine (Gate G1), encoder
+upgrade B32→L14, Day 2 session loop + target picker (Gate G2).
+Live corpora in this workspace: 5,000 COCO val + 82,783 COCO
+train2014, both on MetaCLIP-L14. Tests: 20 passing.
+
+Next (Day 3): Muse rerank + SAM evidence inside the loop,
+hosted demo (Modal/Baseten), 2.5-minute video, submission.
+Parked by design: sub-minute ingest (reduced-resolution dataset
++ fused parallel pipeline) — planned, measured, awaiting a
+go/no-go discussion. Known weaknesses, honestly: wrong-object
+repair is at parity (coverage-bound), union recall at 83k is
+unmeasured, MetaCLIP weights are CC-BY-NC (PE-Core is the
+Apache-2.0 commercial candidate).
