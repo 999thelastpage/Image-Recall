@@ -13,6 +13,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Clue:
     text: str
+    kind: str = "other"  # colour|object|count|setting|activity|person|other
+    referent: str = ""
 
 
 @dataclass(frozen=True)
