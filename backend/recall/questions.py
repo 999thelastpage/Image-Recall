@@ -62,6 +62,13 @@ def attribute_template(clue, idx: int, n: int) -> Question:
             options=["indoors", "outdoors — nature", "outdoors — city",
                      "at the beach / water", NOT_SURE], clue_index=idx,
         )
+    if clue.kind in ("object", "person"):
+        return Question(
+            qid=f"q{n}", kind="attribute",
+            text=f"What was the {clue.referent or 'main subject'} instead?",
+            options=["dog", "cat", "car", "bus", "bicycle", "boat",
+                     "train", "bird", "horse", NOT_SURE], clue_index=idx,
+        )
     return Question(
         qid=f"q{n}", kind="attribute",
         text=f"About “{clue.text}” — which is closest?",

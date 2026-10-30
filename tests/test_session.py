@@ -35,13 +35,25 @@ def test_session_starts_with_question_and_results():
 def test_drop_answer_reranks_and_records():
     s = _session()
     before = [c.image_id for c in s.candidates[:5]]
-    s.answer("red jacket")
-    assert 0 in s.dropped
+    s.answer("beach")  # setting = modifier, safe to drop
+    assert 1 in s.dropped
     out = s.finish()
-    assert out["dropped_clues"] == ["red jacket"]
-    assert "red jacket" in out["explanation"]
+    assert out["dropped_clues"] == ["beach"]
+    assert "beach" in out["explanation"]
     assert len(out["results"]) == 5 or len(out["results"]) >= 1
     _ = before  # order change is data-dependent; provenance is the contract
+
+
+def test_doubted_anchor_is_replaced_not_dropped():
+    s = _session()
+    # 'red jacket' clue is kind=object (anchor): doubting it must
+    # not drop it or re-weight anything; next Q asks replacement.
+    s.answer("red jacket")
+    assert s.dropped == set()
+    assert s.weights == {}
+    assert s.doubted_anchor == 0
+    assert s.pending is not None and s.pending.kind == "attribute"
+    assert s.pending.clue_index == 0
 
 
 def test_not_sure_is_neutral():

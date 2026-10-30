@@ -23,6 +23,7 @@ from .retrieve import ExactIndex
 
 W_DROPPED = 1.6   # branch weight when user doubts that clue
 W_CONFIRMED = 0.5  # branch weight for dropping a confirmed clue
+ANCHOR_KINDS = {"object", "person"}  # doubted anchors get replaced, not dropped
 
 
 @dataclass
@@ -45,6 +46,7 @@ class SearchSession:
     answers: list[Answer] = field(default_factory=list)
     pending: Question | None = None
     dropped: set[int] = field(default_factory=set)
+    doubted_anchor: int | None = None
     status: str = "new"  # new | asking | done
 
     # -- setup ----------------------------------------------------
@@ -61,6 +63,12 @@ class SearchSession:
         if n > MAX_QUESTIONS:
             return None
         asked_kinds = [a.kind for a in self.answers]
+        # a doubted anchor must be replaced before anything else
+        if self.doubted_anchor is not None and all(
+            a.clue_index != self.doubted_anchor for a in self.answers
+        ):
+            return attribute_template(self.clues[self.doubted_anchor],
+                                      self.doubted_anchor, n)
         # 1st: uncertainty, unless already dropped the max clues
         if "uncertainty" not in asked_kinds and len(self.clues) >= 2:
             return uncertainty_question(self.clues, -1, n)
@@ -84,10 +92,15 @@ class SearchSession:
 
         if value != NOT_SURE:
             if q.kind == "uncertainty":
-                # value is the doubted clue's text
+                # value is the doubted clue's text. Modifiers can be
+                # dropped; anchors (main object/person) must be
+                # replaced — searching without them destroys recall.
                 for i, clue in enumerate(self.clues):
                     if clue.text == value:
-                        self._drop_clue(i)
+                        if clue.kind in ANCHOR_KINDS:
+                            self.doubted_anchor = i
+                        else:
+                            self._drop_clue(i)
                         break
             elif q.kind == "attribute" and q.clue_index is not None:
                 self._replace_clue(q.clue_index, value)
@@ -142,9 +155,14 @@ class SearchSession:
         self.status = "done"
         top = self.candidates[:5]
         dropped_texts = [self.clues[i].text for i in sorted(self.dropped)]
+        replaced = [a.value for a in self.answers
+                    if a.kind == "attribute" and a.value != NOT_SURE]
         if dropped_texts:
             why = (f"After your answers we doubted: {', '.join(dropped_texts)}. "
                    "Results lean on the interpretations without them.")
+        elif replaced:
+            why = (f"You corrected a detail to: {', '.join(replaced)}. "
+                   "Results lean on the corrected interpretation.")
         elif self.answers:
             why = "Your answers matched the original description; no clue was dropped."
         else:
