@@ -25,16 +25,38 @@ def main() -> int:
     ap.add_argument("--corpus", default="train2014")
     ap.add_argument("--captions", default="data/coco/captions_train2014.json")
     ap.add_argument("--n", type=int, default=100)
+    ap.add_argument("--model", default=None,
+                    help="HF model id; embeddings cached per model under embeddings/")
     args = ap.parse_args()
 
     import numpy as np
 
+    from backend.recall.config import ENCODER_MODEL
     from backend.recall.embeddings import MetaClipEncoder
     from backend.recall.manifest import read_manifest
     from backend.recall.retrieve import ExactIndex
 
     entries = read_manifest(Path(f"data/manifests/{args.corpus}.jsonl"))
-    mat = np.load(f"embeddings/{args.corpus}.npy")
+    model = args.model or ENCODER_MODEL
+    slug = model.replace("/", "_")
+    cache = Path(f"embeddings/{args.corpus}__{slug}.npy")
+    default_cache = Path(f"embeddings/{args.corpus}.npy")
+    enc = MetaClipEncoder(model)
+    if cache.exists():
+        mat = np.load(cache)
+    elif args.model is None and default_cache.exists():
+        mat = np.load(default_cache)
+        cache = default_cache
+    else:
+        import time as _time
+
+        t0 = _time.time()
+        mat = enc.encode_images([e.path for e in entries])
+        dt = _time.time() - t0
+        np.save(cache, mat)
+        print(f"embedded {len(entries)} with {model} in {dt:.0f}s "
+              f"({len(entries) / dt:.1f} img/s) -> {cache}")
+    print(f"model={model} dim={mat.shape[1]}")
     caps = json.loads(Path(args.captions).read_text())
     by_file = {Path(e.path).name: e.image_id for e in entries}
     usable = [(f, by_file[f]) for f in sorted(caps) if f in by_file]
@@ -43,7 +65,6 @@ def main() -> int:
     print(f"corpus={args.corpus} size={len(entries)} sampled={len(sample)}")
 
     index = ExactIndex([e.image_id for e in entries], mat)
-    enc = MetaClipEncoder()
     hits = {1: 0, 5: 0, 10: 0, 50: 0}
     ranks: list[int] = []
     lat: list[float] = []
