@@ -111,12 +111,16 @@ reported with their layer, not hidden.
 ## Status & next
 
 Done: G0 (API + encoder gates), Day 1 engine (Gate G1), encoder
-upgrade B32→L14, Day 2 session loop + target picker (Gate G2).
+upgrade B32→L14, Day 2 session loop + target picker (Gate G2),
+Day 3 Muse rerank (wrong-clue Hit@5 5/12 → 6/12 on the eval
+subset) + SAM in-box colour evidence, live in the console.
 Live corpora in this workspace: 5,000 COCO val + 82,783 COCO
-train2014, both on MetaCLIP-L14. Tests: 20 passing.
+train2014, both on MetaCLIP-L14. Tests: 24 passing.
 
-Next (Day 3): Muse rerank + SAM evidence inside the loop,
-hosted demo (Modal/Baseten), 2.5-minute video, submission.
+Remaining (human steps): deploy `deploy/modal_app.py` with a
+Modal token and put the URL here + in the video description;
+record the 2.5-minute video; submit the form (copy is
+paste-ready). Development is frozen after Day 3 by design.
 Parked by design: sub-minute ingest (reduced-resolution dataset
 + fused parallel pipeline) — planned, measured, awaiting a
 go/no-go discussion. Known weaknesses, honestly: wrong-object
