@@ -50,12 +50,26 @@ def main() -> int:
     else:
         import time as _time
 
+        # Chunked + resumable: a killed run keeps finished chunks.
+        chunk_dir = Path(f"embeddings/{args.corpus}__{slug}.chunks")
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+        chunk = 2000
+        paths = [e.path for e in entries]
         t0 = _time.time()
-        mat = enc.encode_images([e.path for e in entries])
-        dt = _time.time() - t0
+        done = 0
+        for i in range(0, len(paths), chunk):
+            part = chunk_dir / f"{i:07d}.npy"
+            if not part.exists():
+                np.save(part, enc.encode_images(paths[i : i + chunk]))
+            done = min(i + chunk, len(paths))
+            print(f"  embedded {done}/{len(paths)}", flush=True)
+        mat = np.concatenate(
+            [np.load(chunk_dir / f"{i:07d}.npy") for i in range(0, len(paths), chunk)]
+        )
         np.save(cache, mat)
+        dt = _time.time() - t0
         print(f"embedded {len(entries)} with {model} in {dt:.0f}s "
-              f"({len(entries) / dt:.1f} img/s) -> {cache}")
+              f"({len(entries) / max(dt, 1):.1f} img/s) -> {cache}")
     print(f"model={model} dim={mat.shape[1]}")
     caps = json.loads(Path(args.captions).read_text())
     by_file = {Path(e.path).name: e.image_id for e in entries}
