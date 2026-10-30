@@ -29,6 +29,7 @@ from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
 from backend.recall.providers import MuseClient, ProviderDisabled, load_dotenv
+from backend.recall.config import branch_quota
 from backend.recall.rank import branch_union
 from backend.recall.retrieve import ExactIndex
 
@@ -289,7 +290,7 @@ def search(req: SearchRequest) -> dict:
         hyps = hypotheses(clues)
         t0 = time.time()
         queries = [(h, enc.encode_texts([h.query_text])) for h in hyps]
-        union = branch_union(index, queries, per_branch_k=50)
+        union = branch_union(index, queries, per_branch_k=branch_quota(len(index)))
         timings["recall_search_ms"] = round((time.time() - t0) * 1000, 1)
         out["clues"] = [c.text for c in clues]
         out["parse_source"] = parse_source

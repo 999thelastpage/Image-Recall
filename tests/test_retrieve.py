@@ -43,3 +43,11 @@ def test_row_mismatch_rejected():
         raise AssertionError("expected ValueError")
     except ValueError:
         pass
+
+
+def test_branch_quota_scales_with_corpus():
+    from backend.recall.config import branch_quota
+
+    assert branch_quota(5_000) == 50
+    assert branch_quota(82_783) == 150
+    assert branch_quota(500_000) == 250

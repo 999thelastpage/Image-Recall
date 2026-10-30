@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .clues import Clue, Hypothesis, hypotheses
-from .config import BRANCH_TOP_K, MAX_QUESTIONS
+from .config import MAX_QUESTIONS, branch_quota
 from .questions import NOT_SURE, Question, attribute_template, uncertainty_question
 from .rank import Candidate, branch_union, weighted_rerank
 from .retrieve import ExactIndex
@@ -53,7 +53,7 @@ class SearchSession:
     def start(self) -> None:
         hyps = hypotheses(self.clues)
         queries = [(h, self.encoder.encode_texts([h.query_text])) for h in hyps]
-        self.candidates = branch_union(self.index, queries, BRANCH_TOP_K)
+        self.candidates = branch_union(self.index, queries, branch_quota(len(self.index)))
         self.status = "asking"
         self.pending = self._plan()
 
@@ -119,7 +119,7 @@ class SearchSession:
         if rest:
             hyp = Hypothesis("revised", "; ".join(rest), None)
             q = self.encoder.encode_texts([hyp.query_text])
-            fresh = branch_union(self.index, [(hyp, q)], BRANCH_TOP_K)
+            fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
             self._merge(fresh)
 
     def _replace_clue(self, i: int, value: str) -> None:
@@ -130,7 +130,7 @@ class SearchSession:
         ]
         hyp = Hypothesis(f"answer:{i}", "; ".join(parts), None)
         q = self.encoder.encode_texts([hyp.query_text])
-        fresh = branch_union(self.index, [(hyp, q)], BRANCH_TOP_K)
+        fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
         self.weights[f"answer:{i}"] = W_DROPPED
         self._merge(fresh)
 
