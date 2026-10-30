@@ -104,6 +104,22 @@
       <div class="chips" id="chips"></div>
       <p class="err" id="err"></p>
     </section>
+    <section class="panel">
+      <h2>3 · Recall session (≤3 questions)</h2>
+      <p class="stat">Uses the description + corpus above. Answer truthfully or “Not sure” — nothing is ever hard-filtered.</p>
+      <div class="row" style="margin-top:8px">
+        <button id="sessBtn">Start session</button>
+        <button class="ghost" id="finishBtn" disabled>Show results now</button>
+        <a class="stat" href="/picker.html" target="_blank">Pick a secret target ↗</a>
+      </div>
+      <div id="qcard" hidden style="margin-top:12px">
+        <p id="qtext" style="margin:0 0 8px;font-weight:600"></p>
+        <div class="row" id="qopts"></div>
+        <p class="stat" id="qcount"></p>
+      </div>
+      <p id="explain" style="margin:10px 0 0"></p>
+      <p class="stat" id="scoreLine"></p>
+    </section>
   </div>
   <div>
     <div id="perf"><span>Corpus: <b id="pCorpus">—</b></span><span>Parse: <b id="pParse">—</b></span><span>Search: <b id="pSearch">—</b></span><span>Union: <b id="pUnion">—</b></span></div>
@@ -222,6 +238,76 @@ $('searchBtn').onclick = async () => {
   if (out.recall) $('gridRecall').innerHTML = out.recall.map((it,i) => card(it, i+1, out.baseline && !baseIds.has(it.image_id))).join('');
   $('cols').style.gridTemplateColumns = (out.baseline && out.recall) ? '1fr 1fr' : '1fr';
 };
+
+let sessionId = null, initialRank = {};
+
+function renderSession(snap){
+  $('emptyMsg').hidden = true;
+  $('pCorpus').textContent = `${$('corpus').value}`;
+  $('chips').innerHTML = (snap.clues || []).map(c => `<span class="chip">${c}</span>`).join('');
+  const q = snap.pending_question;
+  $('qcard').hidden = !q;
+  if (q){
+    $('qtext').textContent = q.text;
+    $('qcount').textContent = `Question ${snap.questions_asked + 1} of ${snap.max_questions} · ${snap.parse_source || ''}`;
+    $('qopts').innerHTML = '';
+    for (const opt of q.options){
+      const b = document.createElement('button');
+      b.className = 'ghost'; b.textContent = opt;
+      b.onclick = () => answerSess(opt);
+      $('qopts').appendChild(b);
+    }
+  }
+  $('finishBtn').disabled = false;
+  $('colBase').hidden = true; $('colRecall').hidden = false;
+  $('cols').style.gridTemplateColumns = '1fr';
+  document.querySelector('#colRecall h3').firstChild.textContent = 'Recall session ';
+  $('gridRecall').innerHTML = snap.results.map((it, i) => {
+    const was = initialRank[it.image_id];
+    const move = was == null ? ' · new' : (was - (i + 1) > 0 ? ` · ▲${was - (i + 1)}` : (was - (i + 1) < 0 ? ` · ▼${(i + 1) - was}` : ''));
+    return card({...it, }, i + 1, false).replace('</figcaption>', `${move}</figcaption>`);
+  }).join('');
+}
+
+async function answerSess(value){
+  const r = await fetch(`/api/session/${sessionId}/answer`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({value})});
+  const snap = await r.json();
+  if (!r.ok){ $('err').textContent = snap.detail || 'answer failed'; return; }
+  renderSession(snap);
+  if (!snap.pending_question) finishSess();
+}
+
+async function finishSess(){
+  const r = await fetch(`/api/session/${sessionId}/finish`, {method:'POST'});
+  const out = await r.json();
+  $('qcard').hidden = true; $('finishBtn').disabled = true;
+  $('explain').textContent = out.explanation;
+  // Client-side scoring only: the server never sees the target.
+  try {
+    const t = JSON.parse(localStorage.getItem('recall_target') || 'null');
+    if (t && t.corpus === $('corpus').value){
+      const rank = out.results.findIndex(x => x.image_id === t.image_id) + 1;
+      $('scoreLine').textContent = rank ? `Secret target: FOUND at #${rank} in ${out.questions_asked} question(s).` : 'Secret target: not in final top 5 — honest miss.';
+    }
+  } catch(e) {}
+}
+
+$('sessBtn').onclick = async () => {
+  $('err').textContent = ''; $('explain').textContent = ''; $('scoreLine').textContent = '';
+  const body = {query: $('query').value.trim(), corpus: $('corpus').value};
+  if (!body.query || !body.corpus){ $('err').textContent = 'Need a corpus and a description.'; return; }
+  $('sessBtn').disabled = true;
+  const r = await fetch('/api/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const snap = await r.json();
+  $('sessBtn').disabled = false;
+  if (!r.ok){ $('err').textContent = snap.detail || 'session failed'; return; }
+  sessionId = snap.session_id;
+  initialRank = {};
+  snap.results.forEach((it, i) => initialRank[it.image_id] = i + 1);
+  renderSession(snap);
+};
+
+$('finishBtn').onclick = finishSess;
 
 loadCorpora();
 </script>

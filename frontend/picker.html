@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recall — pick a secret target</title>
+<style>
+  body{margin:0;background:#eceeec;color:#171a17;font:15px/1.45 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+  header{padding:14px 20px;background:#171a17;color:#f2f2ee}
+  header h1{font-size:18px;margin:0} header b{color:#ff8c5a}
+  main{padding:16px 20px;max-width:900px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:14px}
+  figure{margin:0;background:#fff;border:1px solid #d4d9d4;border-radius:6px;overflow:hidden;cursor:pointer}
+  figure:hover{outline:2px solid #b3400f;outline-offset:-2px}
+  figure img{width:100%;height:130px;object-fit:cover;display:block}
+  figcaption{padding:6px 8px;font:11px ui-monospace,Menlo,Consolas,monospace;color:#5c665c}
+  select,button{padding:8px 10px;border-radius:4px;font:inherit}
+  button{background:#b3400f;color:#fff;border:0;font-weight:600;cursor:pointer}
+  .stat{font:12.5px ui-monospace,Menlo,Consolas,monospace;color:#5c665c}
+</style>
+</head>
+<body>
+<header><h1>Recall <b>secret target picker</b></h1></header>
+<main>
+  <p>Pick one photo and remember it. Then describe it in the console
+  <b>with one detail deliberately wrong</b>, answer honestly, and see
+  if Recall still finds it. Your pick is stored only in this browser
+  (localStorage) — the server never learns it, and scoring happens
+  on this machine.</p>
+  <label class="stat">Corpus <select id="corpus"></select></label>
+  <button id="shuffle">Shuffle grid</button>
+  <span class="stat" id="msg"></span>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let seed = 7;
+async function load(){
+  const list = await (await fetch('/api/corpora')).json();
+  $('corpus').innerHTML = list.map(c => `<option value="${c.name}">${c.name} — ${c.count}</option>`).join('');
+  grid();
+}
+async function grid(){
+  const corpus = $('corpus').value;
+  const out = await (await fetch(`/api/random?corpus=${corpus}&n=12&seed=${seed}`)).json();
+  $('grid').innerHTML = '';
+  for (const it of out.items){
+    const f = document.createElement('figure');
+    f.innerHTML = `<img src="${it.url}" alt=""><figcaption>${it.image_id}</figcaption>`;
+    f.onclick = () => {
+      localStorage.setItem('recall_target', JSON.stringify({corpus, image_id: it.image_id}));
+      $('msg').textContent = `Target set: ${it.image_id} (${corpus}). Now describe it in the console — one detail wrong.`;
+    };
+    $('grid').appendChild(f);
+  }
+}
+$('corpus').onchange = grid;
+$('shuffle').onclick = () => { seed = Math.floor(Math.random() * 1e9); grid(); };
+load();
+</script>
+</body>
+</html>

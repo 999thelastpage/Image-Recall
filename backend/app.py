@@ -302,6 +302,100 @@ def search(req: SearchRequest) -> dict:
     return out
 
 
+_sessions: dict[str, dict] = {}
+
+
+class SessionRequest(BaseModel):
+    query: str
+    corpus: str = "coco_val2017"
+
+
+def _enrich(corpus: str, index, snap: dict) -> dict:
+    entries = {e.image_id: e for e in index._entries}  # type: ignore[attr-defined]
+    for r in snap.get("results", []):
+        e = entries.get(r["image_id"])
+        r["url"] = f"/api/image/{corpus}/{r['image_id']}"
+        r["file"] = Path(e.path).name if e else ""
+    return snap
+
+
+@app.post("/api/session")
+def create_session(req: SessionRequest) -> dict:
+    index = get_index(req.corpus)
+    enc = get_encoder()
+    try:
+        chips = MuseClient().parse(req.query)
+        clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
+                 for c in chips if len(c["text"].strip()) > 1]
+        source = "Muse Spark"
+    except Exception:
+        clues = parse_fallback(req.query)
+        source = "fallback"
+    if not clues:
+        raise HTTPException(400, "could not parse any clues from that description")
+    from backend.recall.session import SearchSession
+
+    s = SearchSession(index, enc, req.query, clues)
+    s.start()
+    _sessions[s.session_id] = {"session": s, "corpus": req.corpus, "index": index}
+    snap = _enrich(req.corpus, index, s.snapshot())
+    snap["parse_source"] = source
+    return snap
+
+
+@app.get("/api/session/{session_id}")
+def get_session(session_id: str) -> dict:
+    rec = _sessions.get(session_id)
+    if rec is None:
+        raise HTTPException(404, "unknown session")
+    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
+
+
+class AnswerRequest(BaseModel):
+    value: str
+
+
+@app.post("/api/session/{session_id}/answer")
+def answer_session(session_id: str, req: AnswerRequest) -> dict:
+    rec = _sessions.get(session_id)
+    if rec is None:
+        raise HTTPException(404, "unknown session")
+    try:
+        rec["session"].answer(req.value)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e)) from e
+    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
+
+
+@app.post("/api/session/{session_id}/finish")
+def finish_session(session_id: str) -> dict:
+    rec = _sessions.get(session_id)
+    if rec is None:
+        raise HTTPException(404, "unknown session")
+    out = rec["session"].finish()
+    entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
+    for r in out["results"]:
+        e = entries.get(r["image_id"])
+        r["url"] = f"/api/image/{rec['corpus']}/{r['image_id']}"
+        r["file"] = Path(e.path).name if e else ""
+    return out
+
+
+@app.get("/api/random")
+def random_images(corpus: str = "coco_val2017", n: int = 12, seed: int = 7) -> dict:
+    """Target-picker support: a deterministic pseudo-random grid.
+    The pick itself stays in the browser (localStorage); the
+    server never learns which image was chosen."""
+    import random as _random
+
+    index = get_index(corpus)
+    entries = list(index._entries)  # type: ignore[attr-defined]
+    picks = _random.Random(seed).sample(entries, min(n, len(entries)))
+    return {"corpus": corpus, "items": [
+        {"image_id": e.image_id, "file": Path(e.path).name,
+         "url": f"/api/image/{corpus}/{e.image_id}"} for e in picks]}
+
+
 @app.get("/api/image/{corpus}/{image_id}")
 def image(corpus: str, image_id: str):
     index = get_index(corpus)
