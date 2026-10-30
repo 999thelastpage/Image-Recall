@@ -32,3 +32,8 @@ def test_hypotheses_original_plus_leave_one_out():
 def test_hypotheses_single_clue_has_no_drops():
     hyps = hypotheses([Clue("only clue")])
     assert len(hyps) == 1 and hyps[0].dropped_index is None
+
+
+def test_fallback_splits_on_commas_too():
+    clues = parse_fallback("a red jacket, at the beach, and two dogs")
+    assert [c.text for c in clues] == ["a red jacket", "at the beach", "two dogs"]

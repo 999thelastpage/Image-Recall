@@ -84,6 +84,18 @@ def test_question_cap_is_three():
         s.answer(NOT_SURE)
 
 
+def test_persistence_roundtrip_preserves_state():
+    s = _session()
+    s.answer("beach")
+    data = s.to_dict()
+    s2 = SearchSession.from_dict(s.index, s.encoder, data)
+    assert s2.session_id == s.session_id
+    assert s2.dropped == s.dropped == {1}
+    assert [c.image_id for c in s2.candidates] == [c.image_id for c in s.candidates]
+    assert s2.answers[0].value == "beach"
+    assert (s2.pending is None) == (s.pending is None)
+
+
 def test_finish_without_answers_explains():
     s = _session()
     out = s.finish()

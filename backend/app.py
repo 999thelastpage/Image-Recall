@@ -306,6 +306,35 @@ def search(req: SearchRequest) -> dict:
 _sessions: dict[str, dict] = {}
 
 
+
+def _save_session(rec: dict) -> None:
+    import json
+
+    d = ROOT / "data/sessions"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{rec['session'].session_id}.json").write_text(json.dumps(
+        {"corpus": rec["corpus"], "session": rec["session"].to_dict()}))
+
+
+def _get_rec(session_id: str) -> dict:
+    rec = _sessions.get(session_id)
+    if rec is not None:
+        return rec
+    path = ROOT / "data/sessions" / f"{session_id}.json"
+    if path.exists():
+        import json
+
+        from backend.recall.session import SearchSession
+
+        payload = json.loads(path.read_text())
+        index = get_index(payload["corpus"])
+        s = SearchSession.from_dict(index, get_encoder(), payload["session"])
+        rec = {"session": s, "corpus": payload["corpus"], "index": index}
+        _sessions[session_id] = rec
+        return rec
+    raise HTTPException(404, "unknown session")
+
+
 class SessionRequest(BaseModel):
     query: str
     corpus: str = "coco_val2017"
@@ -339,6 +368,7 @@ def create_session(req: SessionRequest) -> dict:
     s = SearchSession(index, enc, req.query, clues)
     s.start()
     _sessions[s.session_id] = {"session": s, "corpus": req.corpus, "index": index}
+    _save_session(_sessions[s.session_id])
     snap = _enrich(req.corpus, index, s.snapshot())
     snap["parse_source"] = source
     return snap
@@ -346,9 +376,7 @@ def create_session(req: SessionRequest) -> dict:
 
 @app.get("/api/session/{session_id}")
 def get_session(session_id: str) -> dict:
-    rec = _sessions.get(session_id)
-    if rec is None:
-        raise HTTPException(404, "unknown session")
+    rec = _get_rec(session_id)
     return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
 
 
@@ -358,22 +386,20 @@ class AnswerRequest(BaseModel):
 
 @app.post("/api/session/{session_id}/answer")
 def answer_session(session_id: str, req: AnswerRequest) -> dict:
-    rec = _sessions.get(session_id)
-    if rec is None:
-        raise HTTPException(404, "unknown session")
+    rec = _get_rec(session_id)
     try:
         rec["session"].answer(req.value)
     except RuntimeError as e:
         raise HTTPException(400, str(e)) from e
+    _save_session(rec)
     return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
 
 
 @app.post("/api/session/{session_id}/finish")
 def finish_session(session_id: str) -> dict:
-    rec = _sessions.get(session_id)
-    if rec is None:
-        raise HTTPException(404, "unknown session")
+    rec = _get_rec(session_id)
     out = rec["session"].finish()
+    _save_session(rec)
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     for r in out["results"]:
         e = entries.get(r["image_id"])
@@ -384,9 +410,7 @@ def finish_session(session_id: str) -> dict:
 
 @app.post("/api/session/{session_id}/rerank")
 def rerank_session(session_id: str) -> dict:
-    rec = _sessions.get(session_id)
-    if rec is None:
-        raise HTTPException(404, "unknown session")
+    rec = _get_rec(session_id)
     s = rec["session"]
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     paths = {i: e.path for i, e in entries.items()}
@@ -415,9 +439,7 @@ def rerank_session(session_id: str) -> dict:
 def session_evidence(session_id: str) -> dict:
     """SAM evidence for the session's top-3: segment the doubted /
     described referent and read its in-box colour."""
-    rec = _sessions.get(session_id)
-    if rec is None:
-        raise HTTPException(404, "unknown session")
+    rec = _get_rec(session_id)
     s = rec["session"]
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     # prompt: colour clue's referent if any, else the first clue

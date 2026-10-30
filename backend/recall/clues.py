@@ -48,8 +48,11 @@ def dedupe_clues(clues: list[Clue]) -> list[Clue]:
 
 
 def parse_fallback(description: str) -> list[Clue]:
-    parts = [p.strip() for p in description.split(";")]
-    clues = [Clue(p) for p in parts if p]
+    """Offline fallback: split on ';' or ','. It never invents
+    grammar — a single unpunctuated sentence stays one clue."""
+    parts = [p.strip().removeprefix("and ").strip()
+             for p in description.replace(";", ",").split(",")]
+    clues = [Clue(p) for p in parts if len(p) > 1]
     if not clues and description.strip():
         clues = [Clue(description.strip())]
     return clues

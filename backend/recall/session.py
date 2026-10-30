@@ -150,6 +150,55 @@ class SearchSession:
             by_id.values(), key=lambda c: (-c.score, c.image_id)
         )
 
+    # -- persistence --------------------------------------------------
+    def to_dict(self) -> dict:
+        return {
+            "session_id": self.session_id,
+            "description": self.description,
+            "clues": [{"text": c.text, "kind": c.kind, "referent": c.referent}
+                      for c in self.clues],
+            "candidates": [
+                {"image_id": c.image_id, "score": c.score,
+                 "branches": c.branches, "branch_scores": c.branch_scores}
+                for c in self.candidates
+            ],
+            "weights": self.weights,
+            "answers": [{"qid": a.qid, "kind": a.kind, "value": a.value,
+                         "clue_index": a.clue_index} for a in self.answers],
+            "dropped": sorted(self.dropped),
+            "doubted_anchor": self.doubted_anchor,
+            "status": self.status,
+            "pending": None if self.pending is None else {
+                "qid": self.pending.qid, "kind": self.pending.kind,
+                "text": self.pending.text, "options": self.pending.options,
+                "clue_index": self.pending.clue_index,
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, index: ExactIndex, encoder, data: dict) -> "SearchSession":
+        s = cls(
+            index=index, encoder=encoder,
+            description=data["description"],
+            clues=[Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
+                   for c in data["clues"]],
+            session_id=data["session_id"],
+        )
+        s.candidates = [Candidate(c["image_id"], c["score"], c["branches"],
+                                  c.get("branch_scores", {}))
+                        for c in data["candidates"]]
+        s.weights = dict(data.get("weights", {}))
+        s.answers = [Answer(a["qid"], a["kind"], a["value"], a.get("clue_index"))
+                     for a in data.get("answers", [])]
+        s.dropped = set(data.get("dropped", []))
+        s.doubted_anchor = data.get("doubted_anchor")
+        s.status = data.get("status", "asking")
+        p = data.get("pending")
+        s.pending = None if p is None else Question(
+            qid=p["qid"], kind=p["kind"], text=p["text"],
+            options=p["options"], clue_index=p.get("clue_index"))
+        return s
+
     # -- output -----------------------------------------------------
     def finish(self) -> dict:
         self.status = "done"
