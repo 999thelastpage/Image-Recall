@@ -25,8 +25,11 @@ SAM_MODEL = "sam-3.1"
 _PARSE_SYSTEM = (
     "Parse a photo description into clue chips. Return ONLY JSON: "
     '{"clues":[{"text":...,"kind":"colour|object|count|setting|'
-    'activity|person|other","referent":...}]}. Bind colours/counts '
-    "to their referent. No prose."
+    'activity|person|other","referent":...}]}. Each clue is a '
+    "short meaningful phrase (e.g. 'red jacket', 'two dogs', "
+    "'at the beach') — never filler words (a, the, some) and never "
+    "a bare verb. A colour together with its object is ONE clue "
+    "('purple bus'). Bind counts to their noun. No prose."
 )
 
 
