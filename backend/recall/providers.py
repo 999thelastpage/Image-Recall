@@ -29,7 +29,10 @@ _PARSE_SYSTEM = (
     "short meaningful phrase (e.g. 'red jacket', 'two dogs', "
     "'at the beach') — never filler words (a, the, some) and never "
     "a bare verb. A colour together with its object is ONE clue "
-    "('purple bus'). Bind counts to their noun. No prose."
+    "('purple bus'). Bind counts to their noun. Return 3 to 6 "
+    "clues covering the distinct facts (subject, appearance, "
+    "setting, activity) so each can be doubted separately. "
+    "No prose."
 )
 
 

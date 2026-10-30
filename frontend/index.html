@@ -86,7 +86,8 @@
   #resultsHead.show{display:block}
   #resultsHead h2{font-size:21px;margin:0}
   #statsLine{color:var(--soft);font-size:14px;margin:2px 0 14px}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;position:relative}
+  .cols{display:none;grid-template-columns:1fr 1fr;gap:22px;position:relative}
+  .cols.show{display:grid}
   .cols.single{grid-template-columns:1fr}
   .colhead{margin-bottom:10px;border-radius:10px;padding:12px 14px}
   .colhead h3{margin:0;font-size:17px;display:flex;align-items:center;gap:8px}
@@ -96,10 +97,10 @@
   .brandtag{font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:999px;padding:2px 9px}
   #colBase .brandtag{background:#d6dae0;color:#44505e}
   #colRecall .brandtag{background:var(--accent);color:#fff}
-  #vsBadge{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:2;
+  #vsBadge{display:none;width:fit-content;margin:0 auto 14px;
            background:var(--ink);color:#fff;font-weight:800;font-size:12.5px;
            border-radius:999px;padding:5px 13px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
-  .cols.single #vsBadge{display:none}
+  #vsBadge.show{display:block}
   #compareBar{display:none;background:var(--card);border:1px solid var(--line);
               border-radius:var(--radius);padding:14px 18px;margin-bottom:16px}
   #compareBar.show{display:block}
@@ -126,9 +127,19 @@
   .empty{color:var(--soft);text-align:center;padding:44px 20px;background:var(--card);
          border:1px dashed var(--line);border-radius:var(--radius);margin-top:26px}
   .empty b{color:var(--ink)}
+  #enhanceRow{display:flex} #enhanceRow[hidden]{display:none}
   #evidenceLine{white-space:pre-wrap;font-size:14px;color:var(--soft);margin-top:10px}
   footer{max-width:1080px;margin:0 auto;padding:0 20px 34px;color:var(--faint);font-size:13px}
   @media (max-width:820px){.cols{grid-template-columns:1fr} h1{font-size:27px}}
+  @media (max-width:640px){
+    .bar{flex-wrap:wrap;gap:8px}
+    .bar .liblabel{display:none}
+    .bar select{flex:1;min-width:0;max-width:none}
+    .logo{font-size:19px}
+    #vsBadge{display:none!important}
+    .addphotos{padding:14px}
+    textarea{font-size:16px}
+  }
 </style>
 </head>
 <body>
@@ -194,7 +205,7 @@
     <p id="qtext"></p>
     <div id="qopts"></div>
     <div id="explain"></div>
-    <div class="row" id="enhanceRow" hidden style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
+    <div id="enhanceRow" hidden style="gap:9px;margin-top:12px;flex-wrap:wrap">
       <button class="ghosty" id="rerankBtn">Double-check top 10 with AI</button>
       <button class="ghosty" id="evidenceBtn">Show me the evidence (top 3)</button>
       <span id="enhanceStat" style="font-size:13px;color:var(--soft)"></span>
@@ -213,8 +224,8 @@
       <div class="sb"><b id="sbTop">–</b><span>the #1 photo</span></div>
     </div>
   </div>
+  <div id="vsBadge">SAME WORDS · TWO SEARCHES</div>
   <div class="cols" id="cols">
-    <div id="vsBadge">SAME WORDS · TWO SEARCHES</div>
     <div class="col" id="colBase" hidden>
       <div class="colhead"><h3><span class="brandtag">SIMPLE</span> Simple search</h3><p>Believes every word you said, exactly as said.</p></div>
       <div class="grid" id="gridBase"></div>
@@ -351,6 +362,7 @@ $('searchBtn').onclick = async () => {
   $('searchBtn').disabled = false; $('searchBtn').textContent = 'Search my photos';
   if (!r.ok){ $('err').textContent = out.detail || 'Search failed.'; return; }
   $('emptyMsg').style.display = 'none';
+  $('cols').classList.add('show');
   $('resultsHead').classList.add('show');
   $('resultsTitle').textContent = `Results for “${body.query.length > 52 ? body.query.slice(0, 52) + '…' : body.query}”`;
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
@@ -367,6 +379,7 @@ $('searchBtn').onclick = async () => {
   if (out.recall) renderGrid($('gridRecall'), out.recall, out.baseline ? baseIds : null);
   const both = out.baseline && out.recall;
   $('compareBar').classList.toggle('show', !!both);
+  $('vsBadge').classList.toggle('show', !!both);
   if (both){
     $('resultsTitle').textContent = 'Head-to-head: same words, two ways of searching';
     const recallIds = new Set(out.recall.map(x => x.image_id));
@@ -378,7 +391,9 @@ $('searchBtn').onclick = async () => {
     $('sbOnlyBase').textContent = onlyB;
     $('sbTop').textContent = topSame ? 'agrees' : 'differs';
     $('compareVerdict').textContent =
-      onlyR > 0
+      (out.branches && out.branches.length < 2)
+        ? 'Recall had only one way to read that description, so both searches agree. Add another detail (a place, a colour, who was there) and Recall can doubt each one.'
+        : onlyR > 0
         ? `Recall rescued ${onlyR} photo${onlyR > 1 ? 's' : ''} that Simple search missed entirely — look for the green “Found only by Recall” badges.`
         : (topSame
             ? 'Both searches agree this time — no photo was rescued, so your description was probably accurate.'
@@ -394,6 +409,8 @@ function dots(asked, max){
 }
 function renderSession(snap){
   $('emptyMsg').style.display = 'none';
+  $('cols').classList.add('show');
+  $('vsBadge').classList.remove('show');
   $('compareBar').classList.remove('show');
   $('sessionCard').classList.add('show');
   $('resultsHead').classList.add('show');
@@ -433,6 +450,7 @@ async function startSession(){
   $('searchBtn').disabled = false; $('searchBtn').textContent = 'Search my photos';
   if (!r.ok){ $('err').textContent = snap.detail || 'Could not start.'; return; }
   sessionId = snap.session_id; initialRank = {};
+  $('enhanceRow').hidden = true;
   snap.results.forEach((it, i) => initialRank[it.image_id] = i + 1);
   renderSession(snap);
   $('sessionCard').scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -452,7 +470,7 @@ async function finishSess(){
   $('dots').innerHTML = dots(3, 3);
   const ex = $('explain');
   ex.textContent = out.explanation; ex.classList.add('show');
-  $('enhanceRow').hidden = false; $('enhanceRow').style.display = 'flex';
+  $('enhanceRow').hidden = false;
   try {
     const t = JSON.parse(localStorage.getItem('recall_target') || 'null');
     if (t && t.corpus === $('corpus').value){
