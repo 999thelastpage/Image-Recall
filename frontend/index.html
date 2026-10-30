@@ -68,15 +68,18 @@
   <div>
     <section class="panel">
       <h2>1 · Add a photo folder</h2>
-      <label>Corpus name</label>
-      <input type="text" id="cname" placeholder="holiday">
+      <label>Corpus name <span style="text-transform:none">(optional — defaults to the folder's name)</span></label>
+      <input type="text" id="cname" placeholder="auto">
       <div class="row" style="margin-top:12px">
         <button id="pickBtn">Choose folder…</button>
         <span class="stat" id="pickStat">No folder chosen</span>
       </div>
       <input type="file" id="dirPicker" webkitdirectory multiple hidden>
+      <label style="display:flex;gap:7px;align-items:center;margin-top:10px">
+        <input type="checkbox" id="keepOrig" style="width:auto"> Keep full-size copies on the server
+      </label>
       <progress id="ingestBar" value="0" max="100" hidden></progress>
-      <p class="stat" id="ingestMsg">Photos go to this local server only (127.0.0.1) and are embedded there (~150/s on GPU). Nothing leaves this machine.</p>
+      <p class="stat" id="ingestMsg">Photos go to this local server only (127.0.0.1) and are embedded there (~150/s on GPU). Off by default above: only small thumbnails + embeddings (~2 KB/photo) are kept, so a 5 GB folder does NOT become another 5 GB. For zero transfer at all, use the path option below — it reads photos in place.</p>
       <details>
         <summary class="stat">Or paste a server-side path instead</summary>
         <label>Folder on this machine</label>
@@ -152,23 +155,21 @@ function pollJob(job){
   }, 600);
 }
 
-function needName(){
-  const n = $('cname').value.trim();
-  if (!n){ $('err').textContent = 'Give the corpus a name first, then choose the folder.'; $('cname').focus(); return null; }
-  return n;
-}
-
-$('pickBtn').onclick = () => { if (needName()) $('dirPicker').click(); };
+$('pickBtn').onclick = () => $('dirPicker').click();
 
 $('dirPicker').onchange = () => {
-  const name = needName(); if (!name) return;
-  const files = [...$('dirPicker').files].filter(f => /\.(jpe?g|png|webp|bmp)$/i.test(f.name));
+  const all = [...$('dirPicker').files];
+  const files = all.filter(f => /\.(jpe?g|png|webp|bmp)$/i.test(f.name));
   if (!files.length){ $('err').textContent = 'No image files in that folder.'; return; }
+  const folderName = (all[0].webkitRelativePath || '').split('/')[0] || '';
+  const name = $('cname').value.trim() || folderName;
+  if (name && !$('cname').value.trim()) $('cname').value = name;
   $('err').textContent = ''; $('pickBtn').disabled = true;
   $('pickStat').textContent = `sending ${files.length} photos to local server…`;
   $('ingestBar').hidden = false; $('ingestBar').value = 0;
   const fd = new FormData();
   fd.append('name', name);
+  fd.append('keep_originals', $('keepOrig').checked ? 'true' : 'false');
   files.forEach(f => fd.append('files', f, f.name));
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/upload-ingest');
@@ -183,9 +184,9 @@ $('dirPicker').onchange = () => {
 
 $('pathBtn').onclick = async () => {
   $('err').textContent = '';
-  const name = needName(); if (!name) return;
   const folder = $('folder').value.trim();
   if (!folder){ $('err').textContent = 'Paste a folder path first.'; return; }
+  const name = $('cname').value.trim() || folder.replace(/\/+$/,'').split('/').pop() || '';
   $('pickBtn').disabled = true;
   const r = await fetch('/api/ingest', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({folder, name})});
   const job = await r.json();

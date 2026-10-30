@@ -84,6 +84,40 @@ def _clean_name(raw: str) -> str:
     return name
 
 
+def auto_name(raw: str, taken: set[str]) -> str:
+    """Never blocks: sanitize, default to 'photos', de-duplicate."""
+    base = "".join(c if (c.isalnum() or c in "-_") else "-" for c in (raw or "")).strip("-")
+    base = "-".join(p for p in base.split("-") if p) or "photos"
+    name, n = base, 2
+    while name in taken:
+        name = f"{base}-{n}"
+        n += 1
+    return name
+
+
+def _taken_names() -> set[str]:
+    return {p.stem.removesuffix(".meta") for p in (ROOT / "embeddings").glob("*.meta.json")}
+
+
+def make_thumbnails(entries, name: str, root: Path):
+    """Write <=384px JPEGs under data/thumbs/<name>/ and return
+    manifest entries pointing at them (uploads keep no full copies)."""
+    from PIL import Image
+
+    from backend.recall.manifest import ManifestEntry
+
+    thumb_dir = root / "data/thumbs" / name
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    out = []
+    for e in entries:
+        dest = thumb_dir / (Path(e.path).stem + ".jpg")
+        im = Image.open(e.path).convert("RGB")
+        im.thumbnail((384, 384))
+        im.save(dest, quality=80)
+        out.append(ManifestEntry(e.image_id, str(dest), e.sha256, dest.stat().st_size, e.row))
+    return out
+
+
 def _new_job(name: str, folder: Path) -> dict:
     job_id = uuid.uuid4().hex[:8]
     job = {"id": job_id, "name": name, "folder": str(folder), "status": "queued",
@@ -92,7 +126,7 @@ def _new_job(name: str, folder: Path) -> dict:
     return job
 
 
-def _spawn_ingest(job: dict, folder: Path, name: str) -> dict:
+def _spawn_ingest(job: dict, folder: Path, name: str, shrink_uploads: bool = False) -> dict:
     def run() -> None:
         try:
             job["status"] = "scanning"
@@ -119,6 +153,14 @@ def _spawn_ingest(job: dict, folder: Path, name: str) -> dict:
                 "dim": int(mat.shape[1]), "count": int(mat.shape[0]),
                 "device": enc.device, "images_per_sec": job["images_per_sec"],
                 "folder": str(folder)}))
+            if shrink_uploads:
+                entries = make_thumbnails(entries, name, ROOT)
+                uploads_root = (ROOT / "data/uploads").resolve()
+                if uploads_root in folder.resolve().parents:
+                    for e in list(folder.iterdir()):
+                        if e.is_file():
+                            e.unlink()
+                    job["kept_copies"] = "thumbnails only"
             manifest_path, _ = corpus_paths(name)
             write_manifest(entries, manifest_path)
             _indexes.pop(name, None)
@@ -146,13 +188,17 @@ def start_ingest(req: IngestRequest) -> dict:
 
 
 @app.post("/api/upload-ingest")
-async def upload_ingest(name: str = Form(...), files: list[UploadFile] = File(...)) -> dict:
+async def upload_ingest(
+    name: str = Form(""), keep_originals: bool = Form(False),
+    files: list[UploadFile] = File(...),
+) -> dict:
     """Folder picked in the browser: photos are sent to this local
-    server (127.0.0.1 only — nothing leaves the machine), stored
-    under data/uploads/<name>/, then embedded like any folder."""
+    server (127.0.0.1 only — nothing leaves the machine), embedded,
+    and by default only <=384px thumbnails are kept afterwards
+    (embeddings ~2 KB/photo). Set keep_originals to retain copies."""
     from backend.recall.manifest import IMAGE_SUFFIXES
 
-    name = _clean_name(name)
+    name = auto_name(name, _taken_names())
     dest = ROOT / "data/uploads" / name
     dest.mkdir(parents=True, exist_ok=True)
     saved = 0
@@ -169,7 +215,8 @@ async def upload_ingest(name: str = Form(...), files: list[UploadFile] = File(..
         saved += 1
     if not saved:
         raise HTTPException(400, "no image files in that folder")
-    return _spawn_ingest(_new_job(name, dest), dest, name)
+    return _spawn_ingest(_new_job(name, dest), dest, name,
+                         shrink_uploads=not keep_originals)
 
 
 @app.get("/api/ingest/{job_id}")
