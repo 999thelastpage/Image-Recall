@@ -1,0 +1,43 @@
+"""Clue parsing (fallback) and leave-one-clue-out hypotheses.
+
+The primary parser is Muse Spark (see providers). This structured
+fallback always works offline: clues separated by ';'. It never
+guesses at grammar it cannot see.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Clue:
+    text: str
+
+
+@dataclass(frozen=True)
+class Hypothesis:
+    label: str  # "original" or "drop:<index>"
+    query_text: str
+    dropped_index: int | None  # None for the original
+
+
+def parse_fallback(description: str) -> list[Clue]:
+    parts = [p.strip() for p in description.split(";")]
+    clues = [Clue(p) for p in parts if p]
+    if not clues and description.strip():
+        clues = [Clue(description.strip())]
+    return clues
+
+
+def hypotheses(clues: list[Clue]) -> list[Hypothesis]:
+    """Original plus one variant per dropped clue. With a single
+    clue there is nothing to drop, so only the original is returned."""
+    full = "; ".join(c.text for c in clues)
+    out = [Hypothesis("original", full, None)]
+    if len(clues) < 2:
+        return out
+    for i in range(len(clues)):
+        rest = [c.text for j, c in enumerate(clues) if j != i]
+        out.append(Hypothesis(f"drop:{i}", "; ".join(rest), i))
+    return out
