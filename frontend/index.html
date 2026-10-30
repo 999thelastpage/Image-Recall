@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recall — test console</title>
+<style>
+  :root{
+    --bg:#eceeec; --panel:#ffffff; --ink:#171a17; --muted:#5c665c;
+    --line:#d4d9d4; --accent:#b3400f; --accent-ink:#ffffff;
+    --ok:#1d7a3a; --chip:#f0e9e2; --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.45 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+  header{display:flex;align-items:baseline;gap:14px;padding:14px 20px;
+         background:var(--ink);color:#f2f2ee}
+  header h1{font-size:20px;margin:0;letter-spacing:.2px}
+  header h1 b{color:#ff8c5a;font-weight:700}
+  header .sub{color:#b9beb9;font-size:13px}
+  header select{margin-left:auto;background:#262a26;color:#f2f2ee;
+                border:1px solid #454a45;padding:6px 8px;border-radius:4px}
+  main{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px 20px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:16px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fbfcfb}
+  textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fbfcfb;resize:vertical}
+  button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:4px;
+         padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.45;cursor:wait}
+  button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .seg button{background:#fff;color:var(--muted);border-radius:0;font-weight:500;padding:7px 12px}
+  .seg button.on{background:var(--ink);color:#fff}
+  progress{width:100%;height:10px;accent-color:var(--accent)}
+  .stat{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .stat b{color:var(--ink);font-weight:600}
+  #perf{display:flex;gap:18px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);
+        border-radius:6px;padding:10px 16px;margin-bottom:16px;font-family:var(--mono);font-size:13px}
+  #perf span b{font-size:15px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .chip{background:var(--chip);border:1px solid #e0d4c6;border-radius:20px;padding:2px 10px;font-size:13px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .col h3{margin:0 0 10px;font-size:15px}
+  .col h3 .tag{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  figure.rescued{outline:2px solid var(--ok);outline-offset:-2px}
+  figure img{width:100%;height:118px;object-fit:cover;display:block;background:#ddd}
+  figcaption{padding:6px 8px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  figcaption .rank{color:var(--ink);font-weight:700}
+  .br{display:inline-block;background:#eef3ee;border-radius:3px;padding:0 4px;margin:1px 2px 0 0}
+  .empty{color:var(--muted);padding:24px 0}
+  .err{color:#a11;font-size:13px;white-space:pre-wrap}
+  @media (max-width:900px){main{grid-template-columns:1fr}.cols{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Recall <b>test console</b></h1>
+  <span class="sub">finds the photo you remember wrong</span>
+  <select id="corpus" title="Corpus"></select>
+</header>
+<main>
+  <div>
+    <section class="panel">
+      <h2>1 · Add a photo folder</h2>
+      <label>Folder on this machine</label>
+      <input type="text" id="folder" placeholder="/home/you/Pictures/holiday">
+      <label>Corpus name</label>
+      <input type="text" id="cname" placeholder="holiday">
+      <div class="row" style="margin-top:12px">
+        <button id="ingestBtn">Process folder</button>
+        <span class="stat" id="ingestStat"></span>
+      </div>
+      <progress id="ingestBar" value="0" max="100" hidden></progress>
+      <p class="stat" id="ingestMsg">Embeds every image locally (~150/s on GPU). Nothing is uploaded.</p>
+    </section>
+    <section class="panel">
+      <h2>2 · Ask in plain language</h2>
+      <label>Describe the photo — one detail may be wrong</label>
+      <textarea id="query" rows="3" placeholder="my brother in a red jacket riding his bike at the beach">a big purple bus parked in a parking spot</textarea>
+      <label>Mode</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="baseline">Plain search</button>
+        <button data-mode="recall">Recall repair</button>
+        <button data-mode="both" class="on">Compare both</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="searchBtn">Search</button>
+        <span class="stat" id="searchStat"></span>
+      </div>
+      <div class="chips" id="chips"></div>
+      <p class="err" id="err"></p>
+    </section>
+  </div>
+  <div>
+    <div id="perf"><span>Corpus: <b id="pCorpus">—</b></span><span>Parse: <b id="pParse">—</b></span><span>Search: <b id="pSearch">—</b></span><span>Union: <b id="pUnion">—</b></span></div>
+    <div class="cols" id="cols">
+      <div class="col" id="colBase" hidden><h3>Plain search <span class="tag">trusts every word</span></h3><div class="grid" id="gridBase"></div></div>
+      <div class="col" id="colRecall" hidden><h3>Recall repair <span class="tag">doubts each clue in turn</span></h3><div class="grid" id="gridRecall"></div></div>
+    </div>
+    <p class="empty" id="emptyMsg">Pick a corpus, type a description, hit Search. Green outline = found by repair but missing from plain search's top list.</p>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let mode = 'both', jobTimer = null;
+
+async function loadCorpora(selectName){
+  const list = await (await fetch('/api/corpora')).json();
+  const sel = $('corpus'); sel.innerHTML = '';
+  for (const c of list){
+    const o = document.createElement('option');
+    o.value = c.name;
+    o.textContent = `${c.name} — ${c.count} photos (${c.images_per_sec ?? '?'} img/s)`;
+    sel.appendChild(o);
+  }
+  if (selectName) sel.value = selectName;
+  $('pCorpus').textContent = list.length ? `${sel.value} (${list.find(c=>c.name===sel.value)?.count ?? ''})` : 'none yet';
+}
+$('corpus').onchange = () => loadCorpora($('corpus').value);
+
+$('modeSeg').onclick = e => {
+  if (e.target.dataset.mode){ mode = e.target.dataset.mode;
+    [...$('modeSeg').children].forEach(b => b.classList.toggle('on', b.dataset.mode === mode)); }
+};
+
+$('ingestBtn').onclick = async () => {
+  $('err').textContent = '';
+  const body = {folder: $('folder').value.trim(), name: $('cname').value.trim()};
+  if (!body.folder || !body.name){ $('err').textContent = 'Give a folder path and a corpus name.'; return; }
+  $('ingestBtn').disabled = true;
+  const r = await fetch('/api/ingest', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const job = await r.json();
+  if (!r.ok){ $('err').textContent = job.detail || 'ingest failed'; $('ingestBtn').disabled = false; return; }
+  $('ingestBar').hidden = false;
+  jobTimer = setInterval(async () => {
+    const j = await (await fetch('/api/ingest/' + job.id)).json();
+    const pct = j.total ? Math.round(100 * j.done / j.total) : 0;
+    $('ingestBar').value = pct;
+    $('ingestStat').textContent = `${j.status} ${j.done}/${j.total || '?'}`;
+    if (j.status === 'done'){
+      clearInterval(jobTimer); $('ingestBtn').disabled = false;
+      $('ingestMsg').innerHTML = `Done: <b>${j.name}</b> — ${j.total} photos at ${j.images_per_sec} img/s. Selected above, ready to query.`;
+      loadCorpora(j.name);
+    } else if (j.status === 'error'){
+      clearInterval(jobTimer); $('ingestBtn').disabled = false;
+      $('err').textContent = j.error || 'ingest error';
+    }
+  }, 600);
+};
+
+function card(it, rank, rescued){
+  return `<figure class="${rescued ? 'rescued' : ''}"><img loading="lazy" src="${it.url}" alt="">
+    <figcaption><span class="rank">#${rank}</span> ${it.score}<br>${it.image_id}<br>${
+    (it.branches||[]).map(b=>`<span class="br">${b}</span>`).join('')}</figcaption></figure>`;
+}
+
+$('searchBtn').onclick = async () => {
+  $('err').textContent = ''; $('searchBtn').disabled = true; $('searchStat').textContent = 'searching…';
+  const body = {query: $('query').value.trim(), corpus: $('corpus').value, mode, top_k: 12};
+  if (!body.query || !body.corpus){ $('err').textContent = 'Need a corpus and a query.'; $('searchBtn').disabled = false; return; }
+  const t0 = performance.now();
+  const r = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const out = await r.json();
+  $('searchBtn').disabled = false;
+  if (!r.ok){ $('err').textContent = out.detail || 'search failed'; $('searchStat').textContent=''; return; }
+  $('searchStat').textContent = `${Math.round(performance.now()-t0)} ms total`;
+  $('emptyMsg').hidden = true;
+  $('pCorpus').textContent = `${out.corpus} (${out.corpus_size})`;
+  $('pParse').textContent = out.timings.parse_ms != null ? `${out.timings.parse_ms} ms · ${out.parse_source}` : '—';
+  $('pSearch').textContent = `${out.timings.recall_search_ms ?? out.timings.baseline_search_ms ?? '—'} ms`;
+  $('pUnion').textContent = out.union_size != null ? `${out.union_size} candidates / ${out.branches.length} branches` : '—';
+  $('chips').innerHTML = (out.clues || []).map(c => `<span class="chip">${c}</span>`).join('');
+  const baseIds = new Set((out.baseline || []).map(x => x.image_id));
+  $('colBase').hidden = !out.baseline; $('colRecall').hidden = !out.recall;
+  if (out.baseline) $('gridBase').innerHTML = out.baseline.map((it,i) => card(it, i+1, false)).join('');
+  if (out.recall) $('gridRecall').innerHTML = out.recall.map((it,i) => card(it, i+1, out.baseline && !baseIds.has(it.image_id))).join('');
+  $('cols').style.gridTemplateColumns = (out.baseline && out.recall) ? '1fr 1fr' : '1fr';
+};
+
+loadCorpora();
+</script>
+</body>
+</html>

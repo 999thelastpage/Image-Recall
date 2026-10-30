@@ -1,4 +1,7 @@
 numpy>=1.26
 pytest>=8.0
-# Real-encoder path (install when running G0 / ingestion on GPU box):
-# torch, transformers, Pillow
+fastapi>=0.110
+uvicorn[standard]>=0.29
+torch>=2.3
+transformers>=4.40
+Pillow>=10.0
