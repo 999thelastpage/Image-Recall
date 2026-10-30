@@ -118,6 +118,12 @@
         <p class="stat" id="qcount"></p>
       </div>
       <p id="explain" style="margin:10px 0 0"></p>
+      <div class="row" id="enhanceRow" hidden style="margin-top:8px">
+        <button class="ghost" id="rerankBtn">Rerank top 10 with Muse</button>
+        <button class="ghost" id="evidenceBtn">SAM evidence (top 3)</button>
+        <span class="stat" id="enhanceStat"></span>
+      </div>
+      <p class="stat" id="evidenceLine" style="white-space:pre-wrap"></p>
       <p class="stat" id="scoreLine"></p>
     </section>
   </div>
@@ -281,6 +287,7 @@ async function finishSess(){
   const r = await fetch(`/api/session/${sessionId}/finish`, {method:'POST'});
   const out = await r.json();
   $('qcard').hidden = true; $('finishBtn').disabled = true;
+  $('enhanceRow').hidden = false; $('evidenceLine').textContent = '';
   $('explain').textContent = out.explanation;
   // Client-side scoring only: the server never sees the target.
   try {
@@ -308,6 +315,28 @@ $('sessBtn').onclick = async () => {
 };
 
 $('finishBtn').onclick = finishSess;
+
+$('rerankBtn').onclick = async () => {
+  $('enhanceStat').textContent = 'Muse is scoring the top 10… (~15s)';
+  const r = await fetch(`/api/session/${sessionId}/rerank`, {method:'POST'});
+  const out = await r.json();
+  if (!r.ok){ $('enhanceStat').textContent = out.detail || 'rerank failed'; return; }
+  $('enhanceStat').textContent = 'reranked by Muse Spark';
+  $('gridRecall').innerHTML = out.results.map((it, i) =>
+    card(it, i + 1, false).replace('</figcaption>',
+      `<br>enc ${it.encoder_score} · Muse ${it.muse_score ?? '—'}</figcaption>`)).join('');
+};
+
+$('evidenceBtn').onclick = async () => {
+  $('enhanceStat').textContent = 'SAM is segmenting the top 3…';
+  const r = await fetch(`/api/session/${sessionId}/evidence`, {method:'POST'});
+  const out = await r.json();
+  if (!r.ok){ $('enhanceStat').textContent = out.detail || 'evidence failed'; return; }
+  $('enhanceStat').textContent = '';
+  $('evidenceLine').textContent = out.evidence.map(e =>
+    e.colour ? `# ${e.image_id}: SAM found “${e.prompt}” — in-box colour ${e.colour} (you said: ${e.said ?? '—'}, ${e.seconds}s)`
+             : `# ${e.image_id}: ${e.error || 'no evidence'}`).join('\n');
+};
 
 loadCorpora();
 </script>

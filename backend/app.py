@@ -410,6 +410,47 @@ def rerank_session(session_id: str) -> dict:
     }
 
 
+@app.post("/api/session/{session_id}/evidence")
+def session_evidence(session_id: str) -> dict:
+    """SAM evidence for the session's top-3: segment the doubted /
+    described referent and read its in-box colour."""
+    rec = _sessions.get(session_id)
+    if rec is None:
+        raise HTTPException(404, "unknown session")
+    s = rec["session"]
+    entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
+    # prompt: colour clue's referent if any, else the first clue
+    colour_clues = [c for c in s.clues if c.kind == "colour"]
+    prompt = (colour_clues[0].referent if colour_clues and colour_clues[0].referent
+              else (s.clues[0].text if s.clues else "the main subject"))
+    said = colour_clues[0].text if colour_clues else None
+    try:
+        from backend.recall.evidence import dominant_colour, parse_sam_box
+        from backend.recall.providers import SamClient
+
+        sam = SamClient()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"SAM unavailable: {type(e).__name__}") from e
+    out = []
+    for cand in s.candidates[:3]:
+        e = entries.get(cand.image_id)
+        if e is None:
+            continue
+        item = {"image_id": cand.image_id, "prompt": prompt, "said": said}
+        try:
+            got = sam.segment(e.path, prompt)
+            box = parse_sam_box(got["text"])
+            item["seconds"] = got["seconds"]
+            if box:
+                item.update(dominant_colour(e.path, box))
+            else:
+                item["error"] = "SAM returned no box"
+        except Exception as ex:  # noqa: BLE001
+            item["error"] = f"{type(ex).__name__}"
+        out.append(item)
+    return {"session_id": session_id, "evidence": out}
+
+
 @app.get("/api/random")
 def random_images(corpus: str = "coco_val2017", n: int = 12, seed: int = 7) -> dict:
     """Target-picker support: a deterministic pseudo-random grid.
