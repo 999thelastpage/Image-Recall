@@ -90,6 +90,30 @@ class MuseClient:
         )
         return out["choices"][0]["message"]["content"] or ""
 
+    def chat_with_image(self, image_path: str, prompt: str, max_tokens: int = 800) -> str:
+        raw = open(image_path, "rb").read()  # noqa: SIM115
+        b64 = base64.b64encode(raw).decode()
+        mime = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+        out = _post(
+            "/chat/completions",
+            {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url",
+                             "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+                "max_tokens": max_tokens,
+                "reasoning_effort": "low",
+            },
+        )
+        return out["choices"][0]["message"]["content"] or ""
+
     def parse(self, description: str) -> list[dict]:
         """Description -> validated clue chips [{text,kind,referent}]."""
         txt = self._chat(
