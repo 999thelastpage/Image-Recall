@@ -81,9 +81,9 @@
       <progress id="ingestBar" value="0" max="100" hidden></progress>
       <p class="stat" id="ingestMsg">Photos go to this local server only (127.0.0.1) and are embedded there (~150/s on GPU). Off by default above: only small thumbnails + embeddings (~2 KB/photo) are kept, so a 5 GB folder does NOT become another 5 GB. For zero transfer at all, use the path option below — it reads photos in place.</p>
       <details>
-        <summary class="stat">Or paste a server-side path instead</summary>
-        <label>Folder on this machine</label>
-        <input type="text" id="folder" placeholder="/home/you/Pictures/holiday">
+        <summary class="stat">Or paste a path instead (no copy — reads in place, best for big folders)</summary>
+        <label>Folder — Windows (E:\…) or Linux (/home/…) path, both work</label>
+        <input type="text" id="folder" placeholder="E:\GenerativeAI\recall-image\train2014">
         <div class="row" style="margin-top:8px"><button class="ghost" id="pathBtn">Process this path</button></div>
       </details>
     </section>

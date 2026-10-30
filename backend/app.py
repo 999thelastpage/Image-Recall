@@ -77,6 +77,17 @@ def corpora() -> list[dict]:
     return out
 
 
+def windows_to_wsl(p: str) -> str:
+    """'E:\\photos\\a' -> '/mnt/e/photos/a'. Linux paths pass through.
+    Lets users paste Windows paths from Explorer into the UI."""
+    import re
+
+    m = re.match(r"^([A-Za-z]):[\\/](.*)$", (p or "").strip())
+    if not m:
+        return p
+    return f"/mnt/{m.group(1).lower()}/" + m.group(2).replace("\\", "/")
+
+
 def _clean_name(raw: str) -> str:
     name = "".join(c for c in raw if c.isalnum() or c in "-_").strip()
     if not name:
@@ -180,10 +191,14 @@ class IngestRequest(BaseModel):
 
 @app.post("/api/ingest")
 def start_ingest(req: IngestRequest) -> dict:
-    folder = Path(req.folder).expanduser()
+    folder = Path(windows_to_wsl(req.folder)).expanduser()
     if not folder.is_dir():
-        raise HTTPException(400, f"folder not found: {req.folder}")
-    name = _clean_name(req.name)
+        raise HTTPException(
+            400,
+            f"folder not found: {folder}"
+            + (f" (translated from {req.folder!r})" if str(folder) != req.folder else ""),
+        )
+    name = auto_name(req.name or folder.name, _taken_names())
     return _spawn_ingest(_new_job(name, folder), folder, name)
 
 
