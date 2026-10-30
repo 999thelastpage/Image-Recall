@@ -43,37 +43,48 @@ class StubEncoder:
         return _normalize(np.stack([self._vec(p) for p in paths]))
 
 
-class Dinov2Encoder:
-    """facebook/dinov2-base via transformers. Lazy heavy imports so
-    the rest of the package runs without torch installed."""
+def _feats(out) -> np.ndarray:
+    tensor = getattr(out, "pooler_output", out)
+    return tensor.cpu().numpy().astype(np.float32)
+
+
+class MetaClipEncoder:
+    """facebook/metaclip-b32-fullcc2.5b (Meta open weights, CLIP-style
+    joint text+image space). Frozen at G0: Recall@50 0.998, 164 img/s
+    on RTX 4070. Lazy heavy imports so the package runs without torch."""
 
     name = ENCODER_MODEL
     is_stub = False
 
-    def __init__(self, model_name: str = ENCODER_MODEL) -> None:
-        from transformers import AutoImageProcessor, AutoModel  # noqa: PLC0415
+    def __init__(self, model_name: str = ENCODER_MODEL, device: str | None = None) -> None:
         import torch  # noqa: PLC0415
+        from transformers import AutoProcessor, CLIPModel  # noqa: PLC0415
 
         self._torch = torch
-        self.processor = AutoImageProcessor.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
-        self.model.eval()
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model = CLIPModel.from_pretrained(model_name).to(self.device).eval()
 
-    def encode_images(self, paths: list[str]) -> np.ndarray:
+    def encode_images(self, paths: list[str], batch: int = 64) -> np.ndarray:
         from PIL import Image  # noqa: PLC0415
 
         torch = self._torch
         vecs = []
         with torch.no_grad():
-            for path in paths:
-                img = Image.open(path).convert("RGB")
-                inputs = self.processor(images=img, return_tensors="pt")
-                out = self.model(**inputs)
-                vecs.append(out.last_hidden_state[:, 0].cpu().numpy())
+            for i in range(0, len(paths), batch):
+                imgs = [Image.open(p).convert("RGB") for p in paths[i : i + batch]]
+                inp = self.processor(images=imgs, return_tensors="pt").to(self.device)
+                vecs.append(_feats(self.model.get_image_features(**inp)))
         return _normalize(np.concatenate(vecs))
 
-    def encode_texts(self, texts: list[str]) -> np.ndarray:
-        raise NotImplementedError(
-            "DINOv2 has no text tower; text queries are embedded via "
-            "Muse Spark reranking over the image index (see providers)."
-        )
+    def encode_texts(self, texts: list[str], batch: int = 64) -> np.ndarray:
+        torch = self._torch
+        vecs = []
+        with torch.no_grad():
+            for i in range(0, len(texts), batch):
+                inp = self.processor(
+                    text=texts[i : i + batch], return_tensors="pt",
+                    padding=True, truncation=True,
+                ).to(self.device)
+                vecs.append(_feats(self.model.get_text_features(**inp)))
+        return _normalize(np.concatenate(vecs))
