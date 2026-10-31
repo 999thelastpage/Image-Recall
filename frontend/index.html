@@ -357,49 +357,79 @@ $('searchBtn').onclick = async () => {
   if (!body.corpus){ $('err').textContent = 'Add a photo folder first (below the search box).'; return; }
   $('searchBtn').disabled = true; $('searchBtn').textContent = 'Searching…';
   const t0 = performance.now();
-  const r = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  const out = await r.json();
-  $('searchBtn').disabled = false; $('searchBtn').textContent = 'Search my photos';
-  if (!r.ok){ $('err').textContent = out.detail || 'Search failed.'; return; }
+  const secs = () => ((performance.now() - t0) / 1000).toFixed(1);
+  const wantBase = mode === 'baseline' || mode === 'both';
+  const wantRecall = mode === 'recall' || mode === 'both';
   $('emptyMsg').style.display = 'none';
   $('cols').classList.add('show');
   $('resultsHead').classList.add('show');
-  $('resultsTitle').textContent = `Results for “${body.query.length > 52 ? body.query.slice(0, 52) + '…' : body.query}”`;
-  const secs = ((performance.now() - t0) / 1000).toFixed(1);
-  $('statsLine').textContent =
-    `Looked through ${out.corpus_size.toLocaleString()} photos in ${secs}s` +
-    (out.union_size ? ` · Recall merged ${out.union_size} candidates from ${out.branches.length} interpretations` : '') + '.';
-  $('chips').innerHTML = (out.clues || []).length
-    ? '<span class="lbl" style="font-size:13px;color:var(--faint)">Recall split this into:</span>' +
-      out.clues.map(c => `<span class="chip">${c}</span>`).join('') : '';
-  const baseIds = new Set((out.baseline || []).map(x => x.image_id));
-  $('colBase').hidden = !out.baseline; $('colRecall').hidden = !out.recall;
-  $('cols').classList.toggle('single', !(out.baseline && out.recall));
-  if (out.baseline) renderGrid($('gridBase'), out.baseline, null);
-  if (out.recall) renderGrid($('gridRecall'), out.recall, out.baseline ? baseIds : null);
-  const both = out.baseline && out.recall;
-  $('compareBar').classList.toggle('show', !!both);
-  $('vsBadge').classList.toggle('show', !!both);
-  if (both){
-    $('resultsTitle').textContent = 'Head-to-head: same words, two ways of searching';
-    const recallIds = new Set(out.recall.map(x => x.image_id));
+  $('sessionCard').classList.remove('show');
+  $('resultsTitle').textContent = mode === 'both'
+    ? 'Head-to-head: same words, two ways of searching'
+    : `Results for “${body.query.length > 52 ? body.query.slice(0, 52) + '…' : body.query}”`;
+  $('statsLine').textContent = 'Searching…';
+  $('chips').innerHTML = '';
+  $('compareBar').classList.remove('show');
+  $('vsBadge').classList.remove('show');
+  $('colBase').hidden = !wantBase; $('colRecall').hidden = !wantRecall;
+  $('cols').classList.toggle('single', !(wantBase && wantRecall));
+  if (wantBase) $('gridBase').innerHTML = '';
+  if (wantRecall) $('gridRecall').innerHTML =
+    '<p style="color:var(--soft);font-size:14px">Recall is splitting your description and doubting each detail…</p>';
+  let baseOut = null, recallOut = null;
+  const post = m => fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...body, mode: m})}).then(async r => ({ok: r.ok, out: await r.json()}));
+  const renderRecall = () => {
+    const baseIds = baseOut ? new Set(baseOut.baseline.map(x => x.image_id)) : null;
+    renderGrid($('gridRecall'), recallOut.recall, baseIds);
+  };
+  const renderCompare = () => {
+    if (!baseOut || !recallOut) return;
+    $('compareBar').classList.add('show');
+    $('vsBadge').classList.add('show');
+    const baseIds = new Set(baseOut.baseline.map(x => x.image_id));
+    const recallIds = new Set(recallOut.recall.map(x => x.image_id));
     const nBoth = [...recallIds].filter(id => baseIds.has(id)).length;
     const onlyR = recallIds.size - nBoth, onlyB = baseIds.size - nBoth;
-    const topSame = out.baseline[0].image_id === out.recall[0].image_id;
+    const topSame = baseOut.baseline[0].image_id === recallOut.recall[0].image_id;
     $('sbBoth').textContent = nBoth;
     $('sbOnlyRecall').textContent = onlyR;
     $('sbOnlyBase').textContent = onlyB;
     $('sbTop').textContent = topSame ? 'agrees' : 'differs';
     $('compareVerdict').textContent =
-      (out.branches && out.branches.length < 2)
+      (recallOut.branches && recallOut.branches.length < 2)
         ? 'Recall had only one way to read that description, so both searches agree. Add another detail (a place, a colour, who was there) and Recall can doubt each one.'
         : onlyR > 0
         ? `Recall rescued ${onlyR} photo${onlyR > 1 ? 's' : ''} that Simple search missed entirely — look for the green “Found only by Recall” badges.`
         : (topSame
             ? 'Both searches agree this time — no photo was rescued, so your description was probably accurate.'
             : 'Both found the same photos but rank them differently — the disagreement is about order, not coverage.');
-  }
-  $('sessionCard').classList.remove('show');
+  };
+  const tasks = [];
+  if (wantBase) tasks.push(post('baseline').then(({ok, out}) => {
+    if (!ok){ $('err').textContent = out.detail || 'Search failed.'; return; }
+    baseOut = out;
+    renderGrid($('gridBase'), out.baseline, null);
+    if (recallOut) renderRecall();  // refresh “only by Recall” badges
+    $('statsLine').textContent =
+      `Simple search looked through ${out.corpus_size.toLocaleString()} photos in ${secs()}s.` +
+      (wantRecall && !recallOut ? ' Recall is still thinking…' : '');
+  }));
+  if (wantRecall) tasks.push(post('recall').then(({ok, out}) => {
+    if (!ok){ $('err').textContent = out.detail || 'Search failed.'; return; }
+    recallOut = out;
+    $('chips').innerHTML = (out.clues || []).length
+      ? '<span class="lbl" style="font-size:13px;color:var(--faint)">Recall split this into:</span>' +
+        out.clues.map(c => `<span class="chip">${c}</span>`).join('') : '';
+    renderRecall();
+    renderCompare();
+    $('statsLine').textContent =
+      `Looked through ${out.corpus_size.toLocaleString()} photos in ${secs()}s` +
+      (out.union_size ? ` · Recall merged ${out.union_size} candidates from ${out.branches.length} interpretations` : '') +
+      (out.parse_cached ? ' · details remembered from last time (no AI wait)' : '') + '.';
+  }));
+  await Promise.all(tasks);
+  $('searchBtn').disabled = false; $('searchBtn').textContent = 'Search my photos';
 };
 
 /* ---------- session ---------- */

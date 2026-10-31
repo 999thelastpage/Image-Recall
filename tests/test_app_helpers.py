@@ -2,7 +2,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from backend.app import auto_name, make_thumbnails, windows_to_wsl
+from backend.app import (
+    _parse_cache_get,
+    _parse_cache_put,
+    auto_name,
+    make_thumbnails,
+    windows_to_wsl,
+)
 from backend.recall.manifest import ManifestEntry
 
 
@@ -13,6 +19,18 @@ def test_windows_paths_translate_to_wsl():
     # Linux paths pass through untouched
     assert windows_to_wsl("/home/you/photos") == "/home/you/photos"
     assert windows_to_wsl("relative/dir") == "relative/dir"
+
+
+def test_parse_cache_normalises_and_copies():
+    chips = [{"text": "red bus", "kind": "colour", "referent": "bus"}]
+    _parse_cache_put("A  Red   BUS on a street", chips)
+    # case/whitespace variants hit the same entry
+    hit = _parse_cache_get("a red bus on a street")
+    assert hit == chips
+    # callers get copies: mutating a hit must not poison the cache
+    hit[0]["text"] = "mutated"
+    assert _parse_cache_get("a red bus on a street")[0]["text"] == "red bus"
+    assert _parse_cache_get("some other query") is None
 
 
 def test_auto_name_never_blocks():

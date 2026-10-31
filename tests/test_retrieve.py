@@ -45,6 +45,34 @@ def test_row_mismatch_rejected():
         pass
 
 
+def test_topk_keeps_id_ascending_ties_at_the_cut():
+    # scores: z-high .9 | b-tie .5, a-tie .5 | c-low .1 (id order shuffled)
+    mat = np.array([[0.9, 0.0], [0.5, 0.0], [0.5, 0.0], [0.1, 0.0]], dtype=np.float32)
+    index = ExactIndex(["z-high", "b-tie", "a-tie", "c-low"], mat)
+    q = np.array([1.0, 0.0], dtype=np.float32)
+    assert [i for i, _s in index.search(q, 2)] == ["z-high", "a-tie"]
+    assert [i for i, _s in index.search(q, 3)] == ["z-high", "a-tie", "b-tie"]
+    assert [i for i, _s in index.search(q, 99)] == [
+        "z-high", "a-tie", "b-tie", "c-low"]
+
+
+def test_search_many_matches_search_per_query():
+    rng = np.random.default_rng(7)
+    ids = [f"img-{i:06d}" for i in range(300)]
+    mat = rng.standard_normal((300, 24)).astype(np.float32)
+    mat /= np.linalg.norm(mat, axis=1, keepdims=True)
+    index = ExactIndex(ids, mat)
+    queries = rng.standard_normal((5, 24)).astype(np.float32)
+    queries /= np.linalg.norm(queries, axis=1, keepdims=True)
+    batched = index.search_many(queries, 17)
+    assert len(batched) == 5
+    for j in range(5):
+        solo = index.search(queries[j], 17)
+        assert [i for i, _s in batched[j]] == [i for i, _s in solo]
+        assert [round(s, 6) for _i, s in batched[j]] == [
+            round(s, 6) for _i, s in solo]
+
+
 def test_branch_quota_scales_with_corpus():
     from backend.recall.config import branch_quota
 

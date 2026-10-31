@@ -52,7 +52,9 @@ class SearchSession:
     # -- setup ----------------------------------------------------
     def start(self) -> None:
         hyps = hypotheses(self.clues)
-        queries = [(h, self.encoder.encode_texts([h.query_text])) for h in hyps]
+        # One batched encode for all branches, not one call per branch.
+        mat = self.encoder.encode_texts([h.query_text for h in hyps])
+        queries = list(zip(hyps, mat, strict=True))
         self.candidates = branch_union(self.index, queries, branch_quota(len(self.index)))
         self.status = "asking"
         self.pending = self._plan()

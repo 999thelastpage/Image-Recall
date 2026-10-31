@@ -1,5 +1,10 @@
 """Exact cosine retrieval over L2-normalised embeddings (NumPy).
-Exact search is preferred until measured scale requires otherwise."""
+
+Exact search is preferred until measured scale requires otherwise.
+Top-k selection uses argpartition plus a tie-complete boundary, so
+an 83k-row scan never pays for a full sort of all 83k scores, and
+batched queries share one matrix multiply (one read of the matrix).
+"""
 
 from __future__ import annotations
 
@@ -16,16 +21,51 @@ class ExactIndex:
     def __len__(self) -> int:
         return len(self.image_ids)
 
+    def _rank(self, scores: np.ndarray, top_k: int) -> list[tuple[str, float]]:
+        """Top-k of one score row: score desc, then image_id asc.
+
+        Deterministic even at the cut: every row whose score ties the
+        k-th score is considered, so no id-ascending tie is lost to
+        argpartition's arbitrary tie subset."""
+        n = len(scores)
+        k = min(max(top_k, 0), n)
+        if k == 0:
+            return []
+        if k < n:
+            part = np.argpartition(scores, n - k)[n - k:]
+            threshold = scores[part].min()
+            above = np.flatnonzero(scores > threshold).tolist()
+            tied = sorted(
+                (int(i) for i in np.flatnonzero(scores == threshold)),
+                key=lambda i: self.image_ids[i],
+            )
+            cand = above + tied[: k - len(above)]
+        else:
+            cand = list(range(n))
+        order = sorted(
+            cand, key=lambda i: (-float(scores[i]), self.image_ids[i])
+        )
+        return [(self.image_ids[i], float(scores[i])) for i in order]
+
     def search(self, query: np.ndarray, top_k: int) -> list[tuple[str, float]]:
         """Return [(image_id, cosine)] sorted by score desc, then id
         asc for deterministic tie-breaking."""
         if query.ndim == 1:
             query = query[None, :]
         scores = (self.embeddings @ query[0].astype(np.float32)).ravel()
-        order = sorted(
-            range(len(scores)), key=lambda i: (-float(scores[i]), self.image_ids[i])
-        )
-        return [(self.image_ids[i], float(scores[i])) for i in order[:top_k]]
+        return self._rank(scores, top_k)
+
+    def search_many(
+        self, queries: np.ndarray, top_k: int
+    ) -> list[list[tuple[str, float]]]:
+        """One top-k list per query row, from a single matmul — the
+        embedding matrix is read once for all branches, not per branch."""
+        if queries.ndim == 1:
+            queries = queries[None, :]
+        all_scores = self.embeddings @ queries.astype(np.float32).T
+        return [
+            self._rank(all_scores[:, j], top_k) for j in range(all_scores.shape[1])
+        ]
 
     def rank_of(self, query: np.ndarray, image_id: str) -> int | None:
         """1-based rank of an image under a query (evaluation only;

@@ -17,6 +17,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +29,7 @@ from pydantic import BaseModel
 from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
-from backend.recall.providers import MuseClient, ProviderDisabled, load_dotenv
+from backend.recall.providers import MuseClient, load_dotenv
 from backend.recall.config import branch_quota
 from backend.recall.rank import branch_union
 from backend.recall.retrieve import ExactIndex
@@ -65,6 +66,51 @@ def get_index(name: str) -> ExactIndex:
         _indexes[name] = ExactIndex([e.image_id for e in entries], np.load(emb_path))
         _indexes[name]._entries = entries  # type: ignore[attr-defined]
     return _indexes[name]
+
+
+# --- Muse clue-parse cache -------------------------------------
+# A Muse parse is a hosted reasoning-model call (measured 7–16 s);
+# the local lookup after it is ~0.1 s. Identical or whitespace/case-
+# variant repeats of a query must not pay for the API again.
+_parse_cache: dict[str, list[dict]] = {}
+_parse_cache_lock = threading.Lock()
+_PARSE_CACHE_MAX = 256
+
+
+def _parse_cache_key(query: str) -> str:
+    return " ".join((query or "").lower().split())
+
+
+def _parse_cache_get(query: str) -> list[dict] | None:
+    with _parse_cache_lock:
+        hit = _parse_cache.get(_parse_cache_key(query))
+        return [dict(c) for c in hit] if hit is not None else None
+
+
+def _parse_cache_put(query: str, chips: list[dict]) -> None:
+    with _parse_cache_lock:
+        if len(_parse_cache) >= _PARSE_CACHE_MAX:
+            _parse_cache.pop(next(iter(_parse_cache)))  # evict oldest
+        _parse_cache[_parse_cache_key(query)] = [dict(c) for c in chips]
+
+
+_parse_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="muse-parse")
+
+
+def _parse_chips(query: str) -> tuple[list[dict] | None, str, bool]:
+    """(chips, source, cached). chips is None when Muse is
+    unavailable or failed — callers then use the offline fallback."""
+    hit = _parse_cache_get(query)
+    if hit is not None:
+        return hit, "Muse Spark", True
+    try:
+        chips = MuseClient().parse(query)
+    except Exception:  # noqa: BLE001 — disabled/key/network/parse
+        return None, "fallback", False
+    usable = [c for c in chips if len(str(c.get("text", "")).strip()) > 1]
+    if usable:
+        _parse_cache_put(query, usable)
+    return usable, "Muse Spark", False
 
 
 @app.get("/api/corpora")
@@ -267,6 +313,12 @@ def search(req: SearchRequest) -> dict:
 
     out: dict = {"corpus": req.corpus, "corpus_size": len(index), "query": req.query}
 
+    # Start the hosted Muse parse concurrently: baseline (and the
+    # UI's first results) never wait on the network for it.
+    parse_future = None
+    if req.mode in ("recall", "both"):
+        parse_future = _parse_pool.submit(_parse_chips, req.query)
+
     if req.mode in ("baseline", "both"):
         t0 = time.time()
         q = enc.encode_texts([req.query])
@@ -276,20 +328,20 @@ def search(req: SearchRequest) -> dict:
         timings["baseline_search_ms"] = round((time.time() - t0) * 1000, 1)
         out["baseline"] = [item(i, s) for i, s in hits]
 
-    if req.mode in ("recall", "both"):
+    if parse_future is not None:
         t0 = time.time()
-        parse_source = "fallback"
-        try:
-            chips = MuseClient().parse(req.query)
-            clues = [Clue(c["text"]) for c in chips
-                     if len(c["text"].strip()) > 1]  # drop filler chips
-            parse_source = "Muse Spark"
-        except (ProviderDisabled, Exception):
+        chips, parse_source, cached = parse_future.result()
+        if chips is None:
             clues = dedupe_clues(parse_fallback(req.query))
+        else:
+            clues = [Clue(c["text"]) for c in chips]  # drop filler chips
         timings["parse_ms"] = round((time.time() - t0) * 1000, 1)
+        out["parse_cached"] = cached
         hyps = hypotheses(clues)
         t0 = time.time()
-        queries = [(h, enc.encode_texts([h.query_text])) for h in hyps]
+        # Batched encode + batched union: one matmul for all branches.
+        mat = enc.encode_texts([h.query_text for h in hyps]) if hyps else []
+        queries = list(zip(hyps, mat, strict=True))
         union = branch_union(index, queries, per_branch_k=branch_quota(len(index)))
         timings["recall_search_ms"] = round((time.time() - t0) * 1000, 1)
         out["clues"] = [c.text for c in clues]
@@ -353,14 +405,12 @@ def _enrich(corpus: str, index, snap: dict) -> dict:
 def create_session(req: SessionRequest) -> dict:
     index = get_index(req.corpus)
     enc = get_encoder()
-    try:
-        chips = MuseClient().parse(req.query)
-        clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
-                 for c in chips if len(c["text"].strip()) > 1]
-        source = "Muse Spark"
-    except Exception:
+    chips, source, _cached = _parse_chips(req.query)
+    if chips is None:
         clues = dedupe_clues(parse_fallback(req.query))
-        source = "fallback"
+    else:
+        clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
+                 for c in chips]
     if not clues:
         raise HTTPException(400, "could not parse any clues from that description")
     from backend.recall.session import SearchSession

@@ -31,8 +31,16 @@ def branch_union(
     per_branch_k: int = BRANCH_TOP_K,
 ) -> list[Candidate]:
     merged: dict[str, Candidate] = {}
-    for hyp, query in branch_queries:
-        for image_id, score in index.search(query, per_branch_k):
+    # Batched: one matmul for every branch (matrix read once).
+    if hasattr(index, "search_many") and branch_queries:
+        vecs = np.stack(
+            [np.asarray(q, dtype=np.float32).ravel() for _h, q in branch_queries]
+        )
+        per_branch = index.search_many(vecs, per_branch_k)
+    else:
+        per_branch = [index.search(q, per_branch_k) for _h, q in branch_queries]
+    for (hyp, _query), hits in zip(branch_queries, per_branch, strict=True):
+        for image_id, score in hits:
             cand = merged.get(image_id)
             if cand is None:
                 merged[image_id] = Candidate(
