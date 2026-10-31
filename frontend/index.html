@@ -242,7 +242,7 @@
     choose a photo privately, then try to find it from a faulty memory.
   </div>
 </main>
-<footer>Recall runs on this computer. Hosted AI (Muse Spark / SAM) is used only
+<footer id="footNote">Recall runs on this computer. Hosted AI (Muse Spark / SAM) is used only
 for parsing, double-checks and evidence when a key is configured — photos in your
 own folders are embedded locally and never leave the machine.</footer>
 
@@ -544,6 +544,13 @@ $('evidenceBtn').onclick = async () => {
 };
 
 loadCorpora();
+fetch('/api/meta').then(r => r.json()).then(m => {
+  if (!m.demo) return;
+  document.querySelector('.addphotos').style.display = 'none';
+  $('footNote').textContent = 'Hosted demo: 5,000 photos (COCO val2017). ' +
+    'Muse Spark parses your description, SAM 3.1 checks the evidence; ' +
+    'adding your own folders is disabled here.';
+}).catch(() => {});
 </script>
 </body>
 </html>

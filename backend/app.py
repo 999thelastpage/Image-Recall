@@ -14,6 +14,7 @@ Muse parsing is used only when META_MODEL_API_KEY is set (.env).
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 import uuid
@@ -37,7 +38,24 @@ from backend.recall.retrieve import ExactIndex
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(str(ROOT / ".env"))
 
+# Hosted-demo mode (RECALL_DEMO=1, set by deploy/modal_app.py):
+# anyone on the internet can search, ask questions, rerank and view
+# evidence — but nobody can write to the container's disk through
+# the folder-ingest or upload endpoints.
+DEMO_MODE = os.environ.get("RECALL_DEMO") == "1"
+
+
+def _demo_guard() -> None:
+    if DEMO_MODE:
+        raise HTTPException(
+            403, "adding photo folders is disabled in the hosted demo")
+
 app = FastAPI(title="Recall — local test UI")
+
+
+@app.get("/api/meta")
+def meta() -> dict:
+    return {"demo": DEMO_MODE}
 
 _encoder: MetaClipEncoder | None = None
 _encoder_lock = threading.Lock()
@@ -238,6 +256,7 @@ class IngestRequest(BaseModel):
 
 @app.post("/api/ingest")
 def start_ingest(req: IngestRequest) -> dict:
+    _demo_guard()
     folder = Path(windows_to_wsl(req.folder)).expanduser()
     if not folder.is_dir():
         raise HTTPException(
@@ -258,6 +277,7 @@ async def upload_ingest(
     server (127.0.0.1 only — nothing leaves the machine), embedded,
     and by default only <=384px thumbnails are kept afterwards
     (embeddings ~2 KB/photo). Set keep_originals to retain copies."""
+    _demo_guard()
     from backend.recall.manifest import IMAGE_SUFFIXES
 
     name = auto_name(name, _taken_names())

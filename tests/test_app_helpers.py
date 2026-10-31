@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import backend.app as app_module
 from backend.app import (
     _parse_cache_get,
     _parse_cache_put,
@@ -31,6 +32,28 @@ def test_parse_cache_normalises_and_copies():
     hit[0]["text"] = "mutated"
     assert _parse_cache_get("a red bus on a street")[0]["text"] == "red bus"
     assert _parse_cache_get("some other query") is None
+
+
+def test_demo_mode_blocks_writes(monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(app_module, "DEMO_MODE", True)
+    assert app_module.meta() == {"demo": True}
+    for call in (
+        lambda: app_module.start_ingest(
+            app_module.IngestRequest(folder="/tmp", name="x")),
+        lambda: asyncio.run(app_module.upload_ingest(
+            name="x", keep_originals=False, files=[])),
+    ):
+        try:
+            call()
+            raise AssertionError("expected 403 in demo mode")
+        except HTTPException as e:
+            assert e.status_code == 403
+    monkeypatch.setattr(app_module, "DEMO_MODE", False)
+    assert app_module.meta() == {"demo": False}
 
 
 def test_auto_name_never_blocks():
