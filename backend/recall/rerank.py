@@ -34,7 +34,7 @@ def doubt_aware_description(
     notes: list[str] | None = None,
 ) -> str:
     """The description Muse scores against must reflect what the
-    user doubted and corrected — scoring against the original wrong
+    user doubted and corrected: scoring against the original wrong
     description penalises the true photo for the user's own error."""
     parts = [description]
     if dropped:
@@ -94,7 +94,7 @@ class MuseReranker:
             )
             data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
             return max(0.0, min(10.0, float(data["score"]))) / 10.0
-        except Exception:  # noqa: BLE001 — a failed score is neutral
+        except Exception:  # noqa: BLE001: a failed score is neutral
             return None
 
     def rerank(

@@ -113,7 +113,7 @@ def test_doubt_aware_subject_not_sure_scores_dog_photos_low():
     assert "score it low" in out
     assert (
         "The user doubted the subject was 'dogs'; a photo whose main "
-        "subject is dogs is probably not the one — score it low even "
+        "subject is dogs is probably not the one: score it low even "
         "if the other details match."
     ) in out
 

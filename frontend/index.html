@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recall — find the photo you remember wrong</title>
+<title>Recall: find the photo you remember wrong</title>
 <style>
   :root{
     --bg:#f4f4f2; --card:#ffffff; --ink:#1c1e1c; --soft:#4d554d; --faint:#8a918a;
@@ -154,7 +154,7 @@
   </div>
 </header>
 <main>
-  <h1>Find the photo you remember — even if one detail is wrong.</h1>
+  <h1>Find the photo you remember, even if one detail is wrong.</h1>
   <p class="lede">Describe it from memory. If a colour, a place, or an object is
   misremembered, Recall doubts each detail in turn and asks up to three quick
   questions instead of giving up.</p>
@@ -169,7 +169,7 @@
       <button class="ex" data-q="people eating pizza outside at night under string lights">pizza at night</button>
     </div>
     <div class="examples" id="proofExamples" hidden>
-      <span class="lbl">Proof hunts — you know it exists, you remember it a bit wrong:</span>
+      <span class="lbl">Proof hunts: you know it exists, you remember it a bit wrong:</span>
       <button class="ex" data-q="a birthday cake with lit candles on a kitchen table">prove the party happened</button>
       <button class="ex" data-q="a cat sitting on a laptop keyboard on a desk">prove the cat did it</button>
       <button class="ex" data-q="a man holding a tennis racket on a court">prove he played</button>
@@ -182,7 +182,7 @@
         <button data-mode="proof">Find my proof</button>
       </div>
       <button class="primary" id="searchBtn">Search my photos</button>
-      <span class="seghelp" id="modeHelp">Side by side: simple search trusts every word — Recall doubts each detail.</span>
+      <span class="seghelp" id="modeHelp">Side by side: simple search trusts every word. Recall doubts each detail.</span>
     </div>
     <p class="err" id="err"></p>
     <div class="chips" id="chips"></div>
@@ -192,7 +192,7 @@
     <p><b>Use your own photos.</b> Pick a folder and Recall learns it on this
     computer (nothing is uploaded to the internet).
     <small>Only small thumbnails + a fingerprint per photo are kept. For a big
-    folder already on this machine, pasting its path is faster — see below.</small></p>
+    folder already on this machine, pasting its path is faster: see below.</small></p>
     <input class="nameinput" id="cname" placeholder="Library name (optional)">
     <button class="ghosty" id="pickBtn">Choose folder…</button>
     <input type="file" id="dirPicker" webkitdirectory multiple hidden>
@@ -239,19 +239,19 @@
       <div class="grid" id="gridBase"></div>
     </div>
     <div class="col" id="colRecall" hidden>
-      <div class="colhead"><h3><span class="brandtag">RECALL</span> Recall repair</h3><p>Assumes one detail might be wrong — drops or swaps each in turn, then merges.</p></div>
+      <div class="colhead"><h3><span class="brandtag">RECALL</span> Recall repair</h3><p>Assumes one detail might be wrong: drops or swaps each in turn, then merges.</p></div>
       <div class="grid" id="gridRecall"></div>
     </div>
   </div>
   <div class="empty" id="emptyMsg">
-    <b>Nothing searched yet.</b><br>Pick a library above, describe a photo —
-    get one detail wrong on purpose — and hit <b>Search my photos</b>.
+    <b>Nothing searched yet.</b><br>Pick a library above, describe a photo:
+    get one detail wrong on purpose: and hit <b>Search my photos</b>.
     Or open the <a href="/picker.html" target="_blank">secret target picker</a>,
     choose a photo privately, then try to find it from a faulty memory.
   </div>
 </main>
 <footer id="footNote">Recall runs on this computer. Hosted AI (Muse Spark / SAM) is used only
-for parsing, double-checks and evidence when a key is configured — photos in your
+for parsing, double-checks and evidence when a key is configured: photos in your
 own folders are embedded locally and never leave the machine.</footer>
 
 <script>
@@ -260,9 +260,9 @@ let mode = 'both', sessionId = null, initialRank = {}, jobTimer = null;
 
 const MODE_HELP = {
   baseline: 'One quick search that believes your description exactly as written.',
-  both: 'Side by side: simple search trusts every word — Recall doubts each detail.',
+  both: 'Side by side: simple search trusts every word. Recall doubts each detail.',
   session: 'Recall asks up to 3 quick questions, fixing the ranking as you answer.',
-  proof: 'You know the photo exists — you just remember it a bit wrong. Recall hunts it down, then shows you the proof.'
+  proof: 'You know the photo exists: you just remember it a bit wrong. Recall hunts it down, then shows you the proof.'
 };
 let proofMode = false;
 
@@ -298,7 +298,7 @@ function pollJob(job){
     const j = await (await fetch('/api/ingest/' + job.id)).json();
     $('ingestBar').value = j.total ? Math.round(100 * j.done / j.total) : 0;
     $('pickStat').textContent = j.status === 'done'
-      ? `Done — “${j.name}” is ready (${j.total.toLocaleString()} photos, ${j.images_per_sec}/s).`
+      ? `Done: “${j.name}” is ready (${j.total.toLocaleString()} photos, ${j.images_per_sec}/s).`
       : `${j.status}… ${j.done}/${j.total || ''}`;
     if (j.status === 'done'){ clearInterval(jobTimer); $('pickBtn').disabled = false; loadCorpora(j.name); }
     if (j.status === 'error'){ clearInterval(jobTimer); $('pickBtn').disabled = false; $('err').textContent = j.error || 'That folder could not be processed.'; }
@@ -411,10 +411,10 @@ $('searchBtn').onclick = async () => {
       (recallOut.branches && recallOut.branches.length < 2)
         ? 'Recall had only one way to read that description, so both searches agree. Add another detail (a place, a colour, who was there) and Recall can doubt each one.'
         : onlyR > 0
-        ? `Recall rescued ${onlyR} photo${onlyR > 1 ? 's' : ''} that Simple search missed entirely — look for the green “Found only by Recall” badges.`
+        ? `Recall rescued ${onlyR} photo${onlyR > 1 ? 's' : ''} that Simple search missed entirely: look for the green “Found only by Recall” badges.`
         : (topSame
-            ? 'Both searches agree this time — no photo was rescued, so your description was probably accurate.'
-            : 'Both found the same photos but rank them differently — the disagreement is about order, not coverage.');
+            ? 'Both searches agree this time: no photo was rescued, so your description was probably accurate.'
+            : 'Both found the same photos but rank them differently: the disagreement is about order, not coverage.');
   };
   const tasks = [];
   if (wantBase) tasks.push(post('baseline').then(({ok, out}) => {
@@ -456,7 +456,7 @@ function renderSession(snap){
   $('sessionCard').classList.add('show');
   $('resultsHead').classList.add('show');
   $('resultsTitle').textContent = 'Your photos, re-ranked as you answer';
-  $('statsLine').textContent = 'Watch the order change — ▲ means a photo climbed after your answer.';
+  $('statsLine').textContent = 'Watch the order change: ▲ means a photo climbed after your answer.';
   $('chips').innerHTML = '<span class="lbl" style="font-size:13px;color:var(--faint)">Your description, split into details:</span>' +
     (snap.clues || []).map(c => `<span class="chip">${c}</span>`).join('');
   const q = snap.pending_question;
@@ -493,7 +493,7 @@ function renderSession(snap){
   }
   $('colBase').hidden = true; $('colRecall').hidden = false;
   $('cols').classList.add('single');
-  document.querySelector('#colRecall .colhead p').textContent = 'Re-ranked live — nothing is ever removed, only re-ordered.';
+  document.querySelector('#colRecall .colhead p').textContent = 'Re-ranked live: nothing is ever removed, only re-ordered.';
   const topScore = snap.results.length ? snap.results[0].score : 1;
   $('gridRecall').innerHTML = snap.results.map((it, i) => {
     const was = initialRank[it.image_id];
@@ -518,7 +518,7 @@ async function startSession(proof = false){
   renderSession(snap);
   if (proofMode){
     $('resultsTitle').textContent = 'Find the proof: your photo, checked as you answer';
-    $('statsLine').textContent = 'Answer up to 3 questions. At the end, tap “Show the proof” — Recall checks the top 3 photos and tells you what is true in them.';
+    $('statsLine').textContent = 'Answer up to 3 questions. At the end, tap “Show the proof”: Recall checks the top 3 photos and tells you what is true in them.';
     $('evidenceBtn').textContent = 'Show the proof (top 3 photos)';
   } else {
     $('evidenceBtn').textContent = 'Show me the evidence (top 3)';
@@ -544,7 +544,7 @@ async function finishSess(){
   if (Array.isArray(out.results) && out.results.length){
     const topScore = out.results[0].score || 1;
     $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-      {topScore, note: out.reranked ? `AI score ${it.muse_score ?? '—'}/10` : undefined})).join('');
+      {topScore, note: out.reranked ? `AI score ${it.muse_score ?? '-'}/10` : undefined})).join('');
     if (out.reranked){
       $('resultsTitle').textContent = 'Your final results';
       $('statsLine').textContent = 'Final order after the AI double-check of the top photos.';
@@ -556,7 +556,7 @@ async function finishSess(){
       const rank = out.results.findIndex(x => x.image_id === t.image_id) + 1;
       $('scoreLine').textContent = rank
         ? `Your secret target: found at #${rank}. Nicely misremembered.`
-        : 'Your secret target: not in the final top 10 — an honest miss. Try “Double-check with AI”.';
+        : 'Your secret target: not in the final top 10: an honest miss. Try “Double-check with AI”.';
     }
   } catch(e) {}
 }
@@ -568,7 +568,7 @@ $('rerankBtn').onclick = async () => {
   $('enhanceStat').textContent = 'Re-ordered by the AI double-check.';
   const topScore = out.results.length ? out.results[0].score : 1;
   $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-    {topScore, note: `AI score ${it.muse_score ?? '—'}/10`})).join('');
+    {topScore, note: `AI score ${it.muse_score ?? '-'}/10`})).join('');
 };
 $('evidenceBtn').onclick = async () => {
   $('enhanceStat').textContent = 'Looking closely at the top 3…';
@@ -582,7 +582,7 @@ $('evidenceBtn').onclick = async () => {
     const lines = [];
     if (e.found === false) lines.push(`I couldn't clearly find the ${e.prompt} in this photo.`);
     else if (e.count_claimed != null && e.count_found != null)
-      lines.push(`Found ${e.count_found} × ${e.prompt} — you said ${e.count_claimed} (${e.count_found === e.count_claimed ? 'that matches' : 'different number'}).`);
+      lines.push(`Found ${e.count_found} × ${e.prompt}: you said ${e.count_claimed} (${e.count_found === e.count_claimed ? 'that matches' : 'different number'}).`);
     else lines.push(`Found the ${e.prompt}${e.count_found > 1 ? ` (${e.count_found} of them)` : ''} in this photo.`);
     if (e.said && e.colour)
       lines.push(`Colour reads ${e.colour} (you said: ${e.said}).`);

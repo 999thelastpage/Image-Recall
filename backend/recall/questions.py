@@ -2,7 +2,7 @@
 
 Priority (deterministic first, Muse when available):
  1. Clue-uncertainty: ask which detail the user might be
-    misremembering. Grounded in our own mechanism — the answer
+    misremembering. Grounded in our own mechanism: the answer
     directly re-weights the leave-one-out branch for that clue.
  2. Attribute question about the most-doubted clue (Muse Spark
     generates options from candidate context; template fallback).
@@ -85,7 +85,7 @@ def category_question(n: int) -> Question:
     return Question(
         qid=f"q{n}",
         kind="category",
-        text="You weren't sure about the subject — do you remember "
+        text="You weren't sure about the subject: do you remember "
              "what kind of thing it was?",
         options=["A vehicle", "An animal", "A person", NOT_SURE],
         clue_index=None,
@@ -96,8 +96,8 @@ def details_question(n: int) -> Question:
     return Question(
         qid=f"q{n}",
         kind="details",
-        text="Can you give one more detail — where it was, the colours, "
-             "what was happening, or anything else you remember — so we "
+        text="Can you give one more detail: where it was, the colours, "
+             "what was happening, or anything else you remember: so we "
              "can search without the subject?",
         options=[NOT_SURE],
         clue_index=None,
@@ -127,7 +127,7 @@ def attribute_template(clue, idx: int, n: int,
         elif clue.kind in ("object", "person"):
             text = f"What was the {clue.referent or 'main subject'} instead?"
         else:
-            text = f"About “{clue.text}” — which is closest?"
+            text = f"About “{clue.text}”: which is closest?"
         seen: list[str] = []
         for o in options:
             if o not in seen and o != NOT_SURE:
@@ -152,7 +152,7 @@ def attribute_template(clue, idx: int, n: int,
         return Question(
             qid=f"q{n}", kind="attribute",
             text="Where was this taken?",
-            options=["indoors", "outdoors — nature", "outdoors — city",
+            options=["indoors", "outdoors (nature)", "outdoors (city)",
                      "at the beach / water", NOT_SURE], clue_index=idx,
         )
     if clue.kind in ("object", "person"):
@@ -164,6 +164,6 @@ def attribute_template(clue, idx: int, n: int,
         )
     return Question(
         qid=f"q{n}", kind="attribute",
-        text=f"About “{clue.text}” — which is closest?",
+        text=f"About “{clue.text}”: which is closest?",
         options=[clue.text, NOT_SURE], clue_index=idx,
     )

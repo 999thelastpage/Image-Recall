@@ -192,7 +192,7 @@ class SearchSession:
     def _setting_options(self) -> list[str]:
         own = [c.text for j, c in enumerate(self.clues)
                if c.kind == "setting" and j not in self.dropped]
-        generic = ["indoors", "outdoors — nature", "outdoors — city",
+        generic = ["indoors", "outdoors (nature)", "outdoors (city)",
                    "at the beach / water", "on a kitchen table"]
         generic = [g for g in generic
                    if not any(g.split()[-1] in o for o in own)]
@@ -350,7 +350,7 @@ class SearchSession:
             if q.kind == "uncertainty":
                 # value is the doubted clue's text. Modifiers can be
                 # dropped; anchors (main object/person) must be
-                # replaced — searching without them destroys recall.
+                # replaced: searching without them destroys recall.
                 for i, clue in enumerate(self.clues):
                     if clue.text == value:
                         if i == self._anchor_index():

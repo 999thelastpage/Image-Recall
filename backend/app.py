@@ -41,7 +41,7 @@ load_dotenv(str(ROOT / ".env"))
 
 # Hosted-demo mode (RECALL_DEMO=1, set by deploy/modal_app.py):
 # anyone on the internet can search, ask questions, rerank and view
-# evidence — but nobody can write to the container's disk through
+# evidence: but nobody can write to the container's disk through
 # the folder-ingest or upload endpoints.
 DEMO_MODE = os.environ.get("RECALL_DEMO") == "1"
 
@@ -51,7 +51,7 @@ def _demo_guard() -> None:
         raise HTTPException(
             403, "adding photo folders is disabled in the hosted demo")
 
-app = FastAPI(title="Recall — local test UI")
+app = FastAPI(title="Recall: local test UI")
 
 
 @app.get("/api/meta")
@@ -118,13 +118,13 @@ _parse_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="muse-parse")
 
 def _parse_chips(query: str) -> tuple[list[dict] | None, str, bool]:
     """(chips, source, cached). chips is None when Muse is
-    unavailable or failed — callers then use the offline fallback."""
+    unavailable or failed: callers then use the offline fallback."""
     hit = _parse_cache_get(query)
     if hit is not None:
         return hit, "Muse Spark", True
     try:
         chips = MuseClient().parse(query)
-    except Exception:  # noqa: BLE001 — disabled/key/network/parse
+    except Exception:  # noqa: BLE001: disabled/key/network/parse
         return None, "fallback", False
     usable = [c for c in chips if len(str(c.get("text", "")).strip()) > 1]
     if usable:
@@ -275,7 +275,7 @@ async def upload_ingest(
     files: list[UploadFile] = File(...),
 ) -> dict:
     """Folder picked in the browser: photos are sent to this local
-    server (127.0.0.1 only — nothing leaves the machine), embedded,
+    server (127.0.0.1 only: nothing leaves the machine), embedded,
     and by default only <=384px thumbnails are kept afterwards
     (embeddings ~2 KB/photo). Set keep_originals to retain copies."""
     _demo_guard()
@@ -503,8 +503,8 @@ def _doubt_aware(s) -> str:
             referent = words[-1] if words else clue.text
         notes.append(
             f"The user doubted the subject was '{referent}'; a photo "
-            f"whose main subject is {referent} is probably not the one "
-            f"— score it low even if the other details match."
+            f"whose main subject is {referent} is probably not the one: "
+            f"score it low even if the other details match."
         )
     return doubt_aware_description(s.description, dropped, corrections,
                                    notes=notes)
@@ -518,7 +518,7 @@ def finish_session(session_id: str) -> dict:
     _save_session(rec)
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     # Automatic doubt-aware rerank of the top 40: measured rescuing
-    # failures the encoder order could not. Best-effort — without a
+    # failures the encoder order could not. Best-effort: without a
     # Muse key the encoder order stands and we say so.
     out["reranked"] = False
     try:
@@ -534,7 +534,7 @@ def finish_session(session_id: str) -> dict:
             for r in ranked[:FINAL_TOP_K]
         ]
         out["reranked"] = True
-    except Exception as e:  # noqa: BLE001 — surface, never silent
+    except Exception as e:  # noqa: BLE001: surface, never silent
         out["rerank_error"] = f"{type(e).__name__}: rerank unavailable"
     for r in out["results"]:
         e = entries.get(r["image_id"])
@@ -579,7 +579,7 @@ def session_evidence(session_id: str) -> dict:
     presence + count (SAM instances), colour (in-box sampling,
     only when a colour was claimed), and setting/activity claims
     (Muse vision verdict per claim). Dimensions the user never
-    claimed are not reported — no colour readings for people.
+    claimed are not reported: no colour readings for people.
     """
     rec = _get_rec(session_id)
     s = rec["session"]
@@ -638,7 +638,7 @@ def session_evidence(session_id: str) -> dict:
                 data = _json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
                 item["verdicts"] = {c: data.get("verdicts", {}).get(c, "unsure")
                                     for c in claims}
-            except Exception:  # noqa: BLE001 — verdicts are best-effort
+            except Exception:  # noqa: BLE001: verdicts are best-effort
                 item["verdicts"] = {c: "unsure" for c in claims}
         return item
 

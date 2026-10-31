@@ -316,7 +316,7 @@ def test_subject_not_sure_with_other_clues_asks_category_next():
     assert s.pending is not None and s.pending.kind == "category"
     assert s.pending.options == ["A vehicle", "An animal", "A person", NOT_SURE]
     assert s.pending.text == (
-        "You weren't sure about the subject — do you remember "
+        "You weren't sure about the subject: do you remember "
         "what kind of thing it was?"
     )
     assert s.needs_category is True
@@ -504,7 +504,7 @@ def test_subject_not_sure_reorders_by_subjectless_score():
     count_before = len(s.candidates)
     s.answer(NOT_SURE)
     assert s.dropped == {0}
-    # nothing removed — only re-ordered
+    # nothing removed, only re-ordered
     assert len(s.candidates) == count_before
     # live order follows subject-less branch evidence
     expected = sorted(

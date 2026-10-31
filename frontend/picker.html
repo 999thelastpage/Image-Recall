@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recall — pick a secret target</title>
+<title>Recall: pick a secret target</title>
 <style>
   body{margin:0;background:#f4f4f2;color:#1c1e1c;font:15px/1.45 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
   header{padding:14px 20px;background:#fff;color:#1c1e1c;border-bottom:1px solid #e2e4e0}
@@ -25,7 +25,7 @@
   <p>Pick one photo and remember it. Then describe it in the console
   <b>with one detail deliberately wrong</b>, answer honestly, and see
   if Recall still finds it. Your pick is stored only in this browser
-  (localStorage) — the server never learns it, and scoring happens
+  (localStorage): the server never learns it, and scoring happens
   on this machine.</p>
   <label class="stat">Corpus <select id="corpus"></select></label>
   <button id="shuffle">Shuffle grid</button>
@@ -37,7 +37,7 @@ const $ = id => document.getElementById(id);
 let seed = 7;
 async function load(){
   const list = await (await fetch('/api/corpora')).json();
-  $('corpus').innerHTML = list.map(c => `<option value="${c.name}">${c.name} — ${c.count}</option>`).join('');
+  $('corpus').innerHTML = list.map(c => `<option value="${c.name}">${c.name}: ${c.count}</option>`).join('');
   grid();
 }
 async function grid(){
@@ -49,7 +49,7 @@ async function grid(){
     f.innerHTML = `<img src="${it.url}" alt=""><figcaption>${it.image_id}</figcaption>`;
     f.onclick = () => {
       localStorage.setItem('recall_target', JSON.stringify({corpus, image_id: it.image_id}));
-      $('msg').textContent = `Target set: ${it.image_id} (${corpus}). Now describe it in the console — one detail wrong.`;
+      $('msg').textContent = `Target set: ${it.image_id} (${corpus}). Now describe it in the console: one detail wrong.`;
     };
     $('grid').appendChild(f);
   }
