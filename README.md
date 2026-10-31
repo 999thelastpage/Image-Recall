@@ -3,14 +3,17 @@
 Describe a photo with one detail mistaken — a colour, a count, a
 place — and Recall doubts each detail in turn, searches alternate
 interpretations, grounds what it sees, and asks up to three
-one-tap questions to land your photo in its top five.
+one-tap questions to land your photo in its top ten.
 
 Built for the Meta Global AI Developer Hackathon (Indie track,
 Build for Your World). Solo project.
 
-**Live demo:** _hosted link to be added (Modal/Baseten)._ Until
-then it runs locally in one command (below) — that local console
-is what the demo video will show.
+**Live demo:** https://thelastpage--recall-console-web.us-east.modal.run
+(Modal, T4 GPU; 5,000-photo demo library, folder-adding disabled).
+First visit may take ~5 seconds to wake. It also runs locally in
+one command (below) — that local console is what the demo video
+will show. How it works, in simple words: see the
+[product details page](https://thelastpage--recall-console-web.us-east.modal.run/details.html).
 
 ## Try it now (local console)
 
@@ -43,16 +46,23 @@ timings, clue chips, and rescued candidates outlined in green.
 ## How it works
 
 - **Muse Spark 1.3** (Meta Model API) parses a free description
-  into clue chips, picks each clarifying question, and writes
-  grounded explanations. Disabled cleanly when no key is set.
+  into clue chips, reranks the top 40 at finish, and writes
+  grounded explanations. Questions are deterministic templates
+  (subject, bundled colour/count dimension, uncertainty,
+  attribute), never model-invented. Disabled cleanly when no key
+  is set; the offline lexicon parser then splits a plain sentence
+  into colour, count, object, setting and activity clues.
 - **SAM 3.1** (Meta Model API) segments the referred object in top
   candidates; colour/count evidence is sampled inside the mask and
   shown (“you said red — this jacket is orange”).
 - **MetaCLIP-L14** (`facebook/metaclip-l14-fullcc2.5b`, Meta open
   weights) embeds images and text for exact cosine retrieval.
-- Our orchestration: leave-one-clue-out hypotheses, per-branch
-  candidate union with reserved quotas, soft scoring (no hard
-  filters; unknown evidence is neutral), ≤3-question sessions.
+- Our orchestration: leave-one-clue-out plus relax-one-modifier
+  (`purple bus` → `bus`) and limited colour-substitution branches,
+  per-branch candidate union with reserved quotas, reciprocal-rank
+  support as a close-call tiebreak, soft scoring (no hard filters;
+  unknown evidence is neutral), ≤3-question sessions whose answers
+  are validated against the options actually shown.
 
 ## Measured results (no fabricated numbers)
 
@@ -106,9 +116,11 @@ commercial-path candidate.
 backend/    FastAPI app + recall package (manifest, embeddings,
             retrieval, clues, ranking, Meta providers)
 frontend/   static test console (no build step)
-scripts/    ingest, demo_search, g0_encoder, g1_eval,
-            quality_check, fetch_coco, make_fixture
-tests/      index correctness, hypotheses, union, UI helpers
+scripts/    ingest, demo_search, g0_encoder, g1_eval, g2_eval,
+            quality_check, union_recall, encoder_ab, fetch_coco,
+            make_fixture
+tests/      index, clues, hypotheses, union, questions, gates,
+            session traces, UI helpers
 data/       manifests tracked; images/embeddings git-ignored
 ```
 
@@ -125,13 +137,21 @@ Done: G0 (API + encoder gates), Day 1 engine (Gate G1), encoder
 upgrade B32→L14, Day 2 session loop + target picker (Gate G2),
 Day 3 Muse rerank + SAM evidence, live in the console; rerank
 is now automatic and doubt-aware at session finish (top 40).
-Live corpora in this workspace: 5,000 COCO val + 82,783 COCO
-train2014, both on MetaCLIP-L14. Tests: 39 passing.
+Accuracy and question-quality pass after Day 3: offline sentence
+parser, relax/substitution branches, failure-layer logging in
+Gate G2, z-normalised rerank blend, session finish returns the
+top 10, questions ask the bundled colour/count dimension on its
+own, never repeat or re-offer a dropped clue, and derive options
+from the session (colour palette with swatches, session settings).
+`scripts/encoder_ab.py` gates any encoder swap on the true-caption
+ceiling; no swap has been run yet, so the 43/60 number above still
+stands until it is re-measured. Live corpora in this workspace:
+5,000 COCO val + 82,783 COCO train2014, both on MetaCLIP-L14.
+Tests: 82 passing.
 
-Remaining (human steps): deploy `deploy/modal_app.py` with a
-Modal token and put the URL here + in the video description;
-record the 2.5-minute video; submit the form (copy is
-paste-ready). Development is frozen after Day 3 by design.
+Remaining (human steps): record the 2.5-minute video; submit the
+form (copy is paste-ready). The hosted demo is live at the URL
+above; keep it alive through judging.
 Parked by design: sub-minute ingest (reduced-resolution dataset
 + fused parallel pipeline) — planned, measured, awaiting a
 go/no-go discussion. Known weaknesses, honestly: wrong-object
