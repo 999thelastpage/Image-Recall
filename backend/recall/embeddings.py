@@ -45,7 +45,69 @@ class StubEncoder:
 
 def _feats(out) -> np.ndarray:
     tensor = getattr(out, "pooler_output", out)
-    return tensor.cpu().numpy().astype(np.float32)
+    if hasattr(tensor, "cpu"):
+        return tensor.cpu().numpy().astype(np.float32)
+    return np.asarray(tensor, dtype=np.float32)
+
+
+# Candidate encoders for the A/B gate. PE-Core needs Meta's custom
+# loader, so it fails loudly instead of silently falling back.
+ENCODER_CANDIDATES = ("facebook/metaclip-l14-fullcc2.5b",
+                      "google/siglip2-so400m-patch14-384",
+                      "facebook/PE-Core-L14-336")
+
+
+def build_encoder(model_name: str | None = None, device: str | None = None):
+    """Factory: MetaCLIP and SigLIP2 share the transformers path;
+    PE-Core raises until its dedicated loader is added."""
+    name = model_name or ENCODER_MODEL
+    if "PE-Core" in name or "pe-core" in name.lower():
+        raise NotImplementedError(
+            "PE-Core needs its dedicated loader (32-token context, "
+            "336px input); run the A/B with SigLIP2 first or add "
+            "the loader before selecting this encoder")
+    if "siglip" in name.lower():
+        return SiglipEncoder(name, device=device)
+    return MetaClipEncoder(name, device=device)
+
+
+class SiglipEncoder:
+    """SigLIP2 (Apache-2.0) via transformers, same interface."""
+
+    is_stub = False
+
+    def __init__(self, model_name: str, device: str | None = None) -> None:
+        import torch
+        from transformers import AutoModel, AutoProcessor
+
+        self.name = model_name
+        self._torch = torch
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name).to(self.device).eval()
+
+    def encode_images(self, paths: list[str], batch: int = 32) -> np.ndarray:
+        from PIL import Image
+
+        torch = self._torch
+        vecs = []
+        with torch.no_grad():
+            for i in range(0, len(paths), batch):
+                imgs = [Image.open(p).convert("RGB") for p in paths[i:i + batch]]
+                inp = self.processor(images=imgs, return_tensors="pt").to(self.device)
+                vecs.append(_feats(self.model.get_image_features(**inp)))
+        return _normalize(np.concatenate(vecs))
+
+    def encode_texts(self, texts: list[str], batch: int = 32) -> np.ndarray:
+        torch = self._torch
+        vecs = []
+        with torch.no_grad():
+            for i in range(0, len(texts), batch):
+                inp = self.processor(
+                    text=texts[i:i + batch], return_tensors="pt",
+                    padding="max_length", truncation=True).to(self.device)
+                vecs.append(_feats(self.model.get_text_features(**inp)))
+        return _normalize(np.concatenate(vecs))
 
 
 class MetaClipEncoder:

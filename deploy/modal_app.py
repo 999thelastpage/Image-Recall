@@ -58,8 +58,9 @@ image = (
 )
 
 
-@app.function(image=image, gpu="T4", timeout=900, max_containers=1,
-              scaledown_window=600, env={"RECALL_DEMO": "1"},
+@app.function(image=image, gpu="T4", memory=4096, timeout=900,
+              max_containers=1, scaledown_window=600,
+              env={"RECALL_DEMO": "1"},
               secrets=[modal.Secret.from_name("recall-secrets")])
 @modal.asgi_app()
 def web():

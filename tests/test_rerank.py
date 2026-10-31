@@ -1,5 +1,5 @@
 from backend.recall.rank import Candidate
-from backend.recall.rerank import MuseReranker
+from backend.recall.rerank import MuseReranker, doubt_aware_description
 
 
 class FakeClaude:
@@ -30,6 +30,36 @@ def test_rerank_promotes_muse_favourite():
     out = r.rerank(_cands(), paths, "a photo", top_n=3, weight=0.45)
     assert out[0].image_id == "img-000001"
     assert out[0].muse == 1.0
+
+
+def test_doubt_aware_description_without_notes_is_unchanged():
+    assert doubt_aware_description("a purple car in grass", [], []) == (
+        "a purple car in grass"
+    )
+    assert doubt_aware_description(
+        "a purple car in grass", ["purple car"], [("red", "blue")]
+    ) == (
+        "a purple car in grass "
+        "Note: the user may be wrong about: purple car. "
+        "Do not penalise a photo for differing on those details. "
+        "The user corrected 'red' to 'blue'."
+    )
+
+
+def test_doubt_aware_description_appends_notes_verbatim():
+    out = doubt_aware_description(
+        "a purple car in grass",
+        ["the subject 'car'"],
+        [("red", "blue")],
+        notes=["The user confirmed the subject was a vehicle."],
+    )
+    assert out == (
+        "a purple car in grass "
+        "Note: the user may be wrong about: the subject 'car'. "
+        "Do not penalise a photo for differing on those details. "
+        "The user corrected 'red' to 'blue'. "
+        "The user confirmed the subject was a vehicle."
+    )
 
 
 def test_rerank_failure_is_neutral_not_fatal():

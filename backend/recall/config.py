@@ -1,7 +1,7 @@
 """Versioned configuration defaults. Bump CONFIG_VERSION on any change
 that alters ranking behaviour so cached results can be invalidated."""
 
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
 
 # Retrieval
 BRANCH_TOP_K = 50  # reserved per-branch candidate quota (small corpora)
@@ -16,7 +16,8 @@ def branch_quota(corpus_size: int) -> int:
     if corpus_size <= 100_000:
         return 150
     return 250
-FINAL_TOP_K = 5
+FINAL_TOP_K = 10
+RRF_K = 60  # reciprocal-rank fusion constant (rank-based, scale-free)
 EMBEDDING_DIM = 768  # facebook/metaclip-l14-fullcc2.5b output size
 
 # Sessions

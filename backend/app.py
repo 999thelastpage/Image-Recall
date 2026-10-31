@@ -31,7 +31,8 @@ from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
 from backend.recall.providers import MuseClient, load_dotenv
-from backend.recall.config import branch_quota
+from backend.recall.config import ENCODER_MODEL, FINAL_TOP_K, branch_quota
+from backend.recall.questions import COLOURS
 from backend.recall.rank import branch_union
 from backend.recall.retrieve import ExactIndex
 
@@ -225,7 +226,7 @@ def _spawn_ingest(job: dict, folder: Path, name: str, shrink_uploads: bool = Fal
             import json
 
             (ROOT / "embeddings" / f"{name}.meta.json").write_text(json.dumps({
-                "name": name, "model": "facebook/metaclip-b32-fullcc2.5b",
+                "name": name, "model": ENCODER_MODEL,
                 "dim": int(mat.shape[1]), "count": int(mat.shape[0]),
                 "device": enc.device, "images_per_sec": job["images_per_sec"],
                 "folder": str(folder)}))
@@ -354,10 +355,13 @@ def search(req: SearchRequest) -> dict:
         if chips is None:
             clues = dedupe_clues(parse_fallback(req.query))
         else:
-            clues = [Clue(c["text"]) for c in chips]  # drop filler chips
+            clues = dedupe_clues([Clue(c["text"], c.get("kind", "other"),
+                                       c.get("referent", ""))
+                                  for c in chips])
         timings["parse_ms"] = round((time.time() - t0) * 1000, 1)
         out["parse_cached"] = cached
-        hyps = hypotheses(clues)
+        hyps = hypotheses(clues, substitution_colours=tuple(COLOURS),
+                          max_substitutions=2)
         t0 = time.time()
         # Batched encode + batched union: one matmul for all branches.
         mat = enc.encode_texts([h.query_text for h in hyps]) if hyps else []
@@ -429,8 +433,9 @@ def create_session(req: SessionRequest) -> dict:
     if chips is None:
         clues = dedupe_clues(parse_fallback(req.query))
     else:
-        clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
-                 for c in chips]
+        clues = dedupe_clues([Clue(c["text"], c.get("kind", "other"),
+                                   c.get("referent", ""))
+                              for c in chips])
     if not clues:
         raise HTTPException(400, "could not parse any clues from that description")
     from backend.recall.session import SearchSession
@@ -469,14 +474,40 @@ def _doubt_aware(s) -> str:
     from backend.recall.questions import NOT_SURE
     from backend.recall.rerank import doubt_aware_description
 
-    dropped = [s.clues[i].text for i in sorted(s.dropped)]
+    anchor_fn = getattr(s, "_anchor_index", None)
+    anchor = anchor_fn() if callable(anchor_fn) else None
+    dropped = []
+    for i in sorted(s.dropped):
+        clue = s.clues[i]
+        referent = (getattr(clue, "referent", "") or "").strip()
+        if anchor is not None and i == anchor and referent:
+            dropped.append(f"the subject '{referent}'")
+        else:
+            dropped.append(clue.text)
     corrections = [
         (s.clues[a.clue_index].text, a.value)
         for a in s.answers
         if a.kind == "attribute" and a.clue_index is not None
         and a.value != NOT_SURE
     ]
-    return doubt_aware_description(s.description, dropped, corrections)
+    notes = [
+        f"The user confirmed the subject was {a.value.lower()}."
+        for a in s.answers
+        if a.kind == "category" and a.value != NOT_SURE
+    ]
+    if anchor is not None and anchor in s.dropped:
+        clue = s.clues[anchor]
+        referent = (getattr(clue, "referent", "") or "").strip()
+        if not referent:
+            words = clue.text.split()
+            referent = words[-1] if words else clue.text
+        notes.append(
+            f"The user doubted the subject was '{referent}'; a photo "
+            f"whose main subject is {referent} is probably not the one "
+            f"— score it low even if the other details match."
+        )
+    return doubt_aware_description(s.description, dropped, corrections,
+                                   notes=notes)
 
 
 @app.post("/api/session/{session_id}/finish")
@@ -495,16 +526,16 @@ def finish_session(session_id: str) -> dict:
 
         paths = {i: e.path for i, e in entries.items()}
         ranked = MuseReranker(MuseClient(), max_workers=8).rerank(
-            s.candidates, paths, _doubt_aware(s), top_n=40, weight=0.65)
+            s.candidates, paths, _doubt_aware(s))
         out["results"] = [
             {"image_id": r.image_id, "score": round(r.final, 4),
              "muse_score": (None if r.muse is None else round(r.muse, 2)),
              "branches": r.branches}
-            for r in ranked[:5]
+            for r in ranked[:FINAL_TOP_K]
         ]
         out["reranked"] = True
-    except Exception:  # noqa: BLE001 — rerank is an enhancement, not a gate
-        pass
+    except Exception as e:  # noqa: BLE001 — surface, never silent
+        out["rerank_error"] = f"{type(e).__name__}: rerank unavailable"
     for r in out["results"]:
         e = entries.get(r["image_id"])
         r["url"] = f"/api/image/{rec['corpus']}/{r['image_id']}"

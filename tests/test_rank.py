@@ -71,6 +71,27 @@ def test_weighted_rerank_never_lowers_a_score():
     assert by_id["b"].score >= 0.90
 
 
+def test_union_records_rrf_fused_support():
+    enc = StubEncoder()
+    index = _fixture_index(enc)
+    clues = parse_fallback("orange jacket; beach; daylight")
+    hyps = hypotheses(clues)
+    queries = [(h, enc.encode_texts([h.query_text])) for h in hyps]
+    union = branch_union(index, queries, per_branch_k=3)
+    assert all(c.fused > 0 for c in union)
+    multi = max(union, key=lambda c: len(c.branches))
+    assert multi.fused >= min(c.fused for c in union)
+
+
+def test_colour_question_offers_full_palette():
+    from backend.recall.clues import Clue
+    from backend.recall.questions import attribute_template
+
+    q = attribute_template(Clue("purple bus", "colour", "bus"), 0, 1)
+    for colour in ("purple", "brown", "black", "white", "gray"):
+        assert colour in q.options
+
+
 def test_providers_disabled_without_key(monkeypatch):
     monkeypatch.delenv("META_MODEL_API_KEY", raising=False)
     from backend.recall.providers import MuseClient, ProviderDisabled, providers_enabled

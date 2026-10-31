@@ -464,11 +464,32 @@ function renderSession(snap){
   $('qcount').textContent = q ? `Question ${snap.questions_asked + 1} of ${snap.max_questions}` : 'All questions done';
   $('qtext').textContent = q ? q.text : '';
   $('qopts').innerHTML = '';
+  const SWATCH = {red:'#c0392b',orange:'#e67e22',yellow:'#d4ac0d',green:'#27ae60',blue:'#2471a3',purple:'#7d3c98',pink:'#e5989b',brown:'#7b4a2b',black:'#1c1c1c',white:'#f5f5f5',gray:'#808b96',grey:'#808b96'};
   if (q) for (const opt of q.options){
     const b = document.createElement('button');
-    b.className = 'ghosty'; b.textContent = opt;
+    b.className = 'ghosty';
+    const hex = SWATCH[String(opt).toLowerCase()];
+    if (hex){
+      const dot = document.createElement('span');
+      dot.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:50%;background:${hex};border:1px solid #999;margin-right:7px;vertical-align:-1px`;
+      b.appendChild(dot);
+    }
+    b.appendChild(document.createTextNode(opt));
     b.onclick = () => answerSess(opt);
     $('qopts').appendChild(b);
+  }
+  if (q && q.kind === 'details'){
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'nameinput'; inp.id = 'detailsInput';
+    inp.placeholder = 'One more detail…';
+    inp.style.minWidth = '240px'; inp.style.flex = '1';
+    const submit = document.createElement('button');
+    submit.className = 'ghosty'; submit.textContent = 'Submit';
+    const send = () => { const v = inp.value.trim(); if (v) answerSess(v); };
+    submit.onclick = send;
+    inp.onkeydown = e => { if (e.key === 'Enter') send(); };
+    $('qopts').appendChild(inp);
+    $('qopts').appendChild(submit);
   }
   $('colBase').hidden = true; $('colRecall').hidden = false;
   $('cols').classList.add('single');
@@ -520,13 +541,22 @@ async function finishSess(){
   const ex = $('explain');
   ex.textContent = out.explanation; ex.classList.add('show');
   $('enhanceRow').hidden = false;
+  if (Array.isArray(out.results) && out.results.length){
+    const topScore = out.results[0].score || 1;
+    $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
+      {topScore, note: out.reranked ? `AI score ${it.muse_score ?? '—'}/10` : undefined})).join('');
+    if (out.reranked){
+      $('resultsTitle').textContent = 'Your final results';
+      $('statsLine').textContent = 'Final order after the AI double-check of the top photos.';
+    }
+  }
   try {
     const t = JSON.parse(localStorage.getItem('recall_target') || 'null');
     if (t && t.corpus === $('corpus').value){
       const rank = out.results.findIndex(x => x.image_id === t.image_id) + 1;
       $('scoreLine').textContent = rank
         ? `Your secret target: found at #${rank}. Nicely misremembered.`
-        : 'Your secret target: not in the final top 5 — an honest miss. Try “Double-check with AI”.';
+        : 'Your secret target: not in the final top 10 — an honest miss. Try “Double-check with AI”.';
     }
   } catch(e) {}
 }

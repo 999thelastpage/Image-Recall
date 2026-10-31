@@ -4,13 +4,19 @@ from PIL import Image
 
 import backend.app as app_module
 from backend.app import (
+    _doubt_aware,
     _parse_cache_get,
     _parse_cache_put,
     auto_name,
     make_thumbnails,
     windows_to_wsl,
 )
+from backend.recall.clues import Clue
+from backend.recall.embeddings import StubEncoder
 from backend.recall.manifest import ManifestEntry
+from backend.recall.questions import NOT_SURE, SOMETHING_ELSE
+from backend.recall.retrieve import ExactIndex
+from backend.recall.session import SearchSession
 
 
 def test_windows_paths_translate_to_wsl():
@@ -54,6 +60,73 @@ def test_demo_mode_blocks_writes(monkeypatch):
             assert e.status_code == 403
     monkeypatch.setattr(app_module, "DEMO_MODE", False)
     assert app_module.meta() == {"demo": False}
+
+
+def test_doubt_aware_bundled_anchor_doubts_only_subject_and_passes_category():
+    enc = StubEncoder()
+    captions = [
+        "purple bus parked in grass",
+        "purple car parked on street",
+        "red car parked in grass",
+        "blue bus parked in grass",
+    ]
+    ids = [f"img-{i:06d}" for i in range(len(captions))]
+    index = ExactIndex(ids, enc.encode_texts(captions))
+    clues = [Clue("purple car", "colour", "car"),
+             Clue("in grass", "setting", "grass")]
+    s = SearchSession(index, enc, "a purple car in grass", clues)
+    s.start()
+    assert s.pending is not None and s.pending.kind == "subject"
+    s.answer(NOT_SURE)
+    assert s.pending is not None and s.pending.kind == "category"
+    s.answer("A vehicle")
+    out = _doubt_aware(s)
+    assert "the subject 'car'" in out
+    assert "wrong about: purple car" not in out
+    assert "confirmed the subject was a vehicle" in out
+
+
+def _dogs_app_session() -> SearchSession:
+    enc = StubEncoder()
+    captions = [
+        "two dogs; together",
+        "two cats; together",
+        "one dog; alone",
+        "two birds; together",
+    ]
+    ids = [f"img-{i:06d}" for i in range(len(captions))]
+    index = ExactIndex(ids, enc.encode_texts(captions))
+    clues = [Clue("two dogs", "count", "dogs"),
+             Clue("together", "other", "dogs")]
+    s = SearchSession(index, enc, "two dogs together", clues)
+    s.start()
+    return s
+
+
+def test_doubt_aware_subject_not_sure_scores_dog_photos_low():
+    s = _dogs_app_session()
+    assert s.pending is not None and s.pending.kind == "subject"
+    s.answer(NOT_SURE)
+    assert 0 in s.dropped
+    out = _doubt_aware(s)
+    assert "probably not the one" in out
+    assert "score it low" in out
+    assert (
+        "The user doubted the subject was 'dogs'; a photo whose main "
+        "subject is dogs is probably not the one — score it low even "
+        "if the other details match."
+    ) in out
+
+
+def test_doubt_aware_replaced_subject_not_excluded():
+    s = _dogs_app_session()
+    s.answer(SOMETHING_ELSE)
+    assert s.dropped == set()
+    s.answer("cat")  # replacement: anchor NOT dropped
+    assert s.dropped == set()
+    out = _doubt_aware(s)
+    assert "probably not the one" not in out
+    assert "score it low" not in out
 
 
 def test_auto_name_never_blocks():

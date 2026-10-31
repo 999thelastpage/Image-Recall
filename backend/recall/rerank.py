@@ -16,8 +16,8 @@ from dataclasses import dataclass
 
 from .rank import Candidate
 
-RERANK_WEIGHT = 0.45
-RERANK_TOP_N = 10
+RERANK_WEIGHT = 0.65
+RERANK_TOP_N = 40
 
 _PROMPT = (
     "A user is looking for a photo they described as: \"{desc}\"\n"
@@ -31,6 +31,7 @@ def doubt_aware_description(
     description: str,
     dropped: list[str],
     corrections: list[tuple[str, str]],
+    notes: list[str] | None = None,
 ) -> str:
     """The description Muse scores against must reflect what the
     user doubted and corrected — scoring against the original wrong
@@ -43,6 +44,8 @@ def doubt_aware_description(
         )
     for old, new in corrections:
         parts.append(f"The user corrected '{old}' to '{new}'.")
+    if notes:
+        parts.extend(notes)
     return " ".join(parts)
 
 
@@ -60,6 +63,22 @@ def _minmax(values: list[float]) -> list[float]:
     if hi - lo < 1e-9:
         return [0.5] * len(values)
     return [(v - lo) / (hi - lo) for v in values]
+
+
+def _znorm(values: list[float]) -> list[float]:
+    """Per-query z-normalised scores mapped to [0, 1].
+
+    Min-max lets one outlier compress every other candidate;
+    z-norm with clipping keeps the blend calibrated when the
+    encoder scores are tightly clustered."""
+    if not values:
+        return []
+    mean = sum(values) / len(values)
+    var = sum((v - mean) ** 2 for v in values) / len(values)
+    std = var ** 0.5
+    if std < 1e-9:
+        return [0.5] * len(values)
+    return [min(1.0, max(0.0, ((v - mean) / std + 2.0) / 4.0)) for v in values]
 
 
 class MuseReranker:
@@ -87,7 +106,7 @@ class MuseReranker:
         weight: float = RERANK_WEIGHT,
     ) -> list[RerankedCandidate]:
         head, tail = candidates[:top_n], candidates[top_n:]
-        enc_norm = _minmax([c.score for c in head])
+        enc_norm = _znorm([c.score for c in head])
         jobs = [(image_paths[c.image_id], description) for c in head]
         with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
             muse_scores = list(ex.map(self._score, jobs))

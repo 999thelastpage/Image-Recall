@@ -62,13 +62,36 @@ def pick_cases(captions: dict, by_file: dict, per_kind: int = 10,
     return spread(colour, per_kind) + spread(obj, per_kind) + spread(acc, n_accurate)
 
 
+def classify_failure(base_rank, union_rank, final_rank, hit_k: int = 5) -> str:
+    """Failure layer for one case. Ceiling vs coverage vs ranking
+    keeps the next lever honest instead of tuning blind."""
+    if final_rank is not None and final_rank <= hit_k:
+        return "hit"
+    if base_rank is not None and base_rank <= hit_k:
+        return "ranking-demotion"
+    if union_rank is None:
+        return "coverage"
+    if union_rank > 40:
+        return "pool-depth"
+    return "ranking"
+
+
 def simulate(session, case: dict) -> None:
-    from backend.recall.questions import NOT_SURE
+    from backend.recall.questions import NOT_SURE, SOMETHING_ELSE, YES_SURE
 
     while session.pending is not None and len(session.answers) < 3:
         q = session.pending
         value = NOT_SURE
-        if q.kind == "uncertainty" and case["wrong"]:
+        if q.kind == "subject":
+            if (case["wrong"] and q.clue_index is not None
+                    and 0 <= q.clue_index < len(session.clues)
+                    and case["wrong"] in session.clues[q.clue_index].text.lower()):
+                value = SOMETHING_ELSE
+            else:
+                value = YES_SURE
+        elif q.kind in ("category", "details"):
+            value = NOT_SURE
+        elif q.kind == "uncertainty" and case["wrong"]:
             value = next((o for o in q.options
                           if case["wrong"] in o.lower()), NOT_SURE)
         elif q.kind == "attribute" and q.clue_index is not None and case["wrong"]:
@@ -121,6 +144,8 @@ def main() -> int:
                  for c in chips if len(c["text"].strip()) > 1]
         s = SearchSession(index, enc, case["query"], clues)
         s.start()
+        union_rank = next((r for r, c in enumerate(s.candidates, 1)
+                           if c.image_id == target), None)
         simulate(s, case)
         out = s.finish()
         final_rank = next((r for r, x in enumerate(out["results"], 1)
@@ -144,10 +169,13 @@ def main() -> int:
             full_rank = next((r for r, x in enumerate(ranked, 1)
                               if x.image_id == target), None)
         recall_hit = full_rank is not None and full_rank <= 5
+        layer = classify_failure(base_rank, union_rank, full_rank)
         rows.append({**case, "base_hit": base_hit, "recall_hit": recall_hit,
-                     "base_rank": base_rank, "final_rank": full_rank})
+                     "base_rank": base_rank, "final_rank": full_rank,
+                     "union_rank": union_rank, "layer": layer})
         print(f"[{i:2d}] {case['kind']:8s} base={str(base_rank):>5s} "
-              f"final={str(full_rank):>5s} {'REPAIRED' if recall_hit and not base_hit else ''} "
+              f"union={str(union_rank):>5s} final={str(full_rank):>5s} "
+              f"layer={layer} {'REPAIRED' if recall_hit and not base_hit else ''} "
               f"| {case['query'][:58]}")
 
     for kind, label in [("colour", "wrong-colour"), ("object", "wrong-object"),
@@ -156,6 +184,9 @@ def main() -> int:
         b = sum(r["base_hit"] for r in sub)
         r_ = sum(r["recall_hit"] for r in sub)
         print(f"{label}: baseline Hit@5 {b}/{len(sub)} -> Recall {r_}/{len(sub)}")
+    from collections import Counter
+
+    print("failure layers:", dict(Counter(r["layer"] for r in rows)))
     wrong = [r for r in rows if r["kind"] != "accurate"]
     b = sum(r["base_hit"] for r in wrong)
     r_ = sum(r["recall_hit"] for r in wrong)
