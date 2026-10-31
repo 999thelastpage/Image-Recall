@@ -27,6 +27,25 @@ _PROMPT = (
 )
 
 
+def doubt_aware_description(
+    description: str,
+    dropped: list[str],
+    corrections: list[tuple[str, str]],
+) -> str:
+    """The description Muse scores against must reflect what the
+    user doubted and corrected — scoring against the original wrong
+    description penalises the true photo for the user's own error."""
+    parts = [description]
+    if dropped:
+        parts.append(
+            "Note: the user may be wrong about: " + ", ".join(dropped)
+            + ". Do not penalise a photo for differing on those details."
+        )
+    for old, new in corrections:
+        parts.append(f"The user corrected '{old}' to '{new}'.")
+    return " ".join(parts)
+
+
 @dataclass
 class RerankedCandidate:
     image_id: str

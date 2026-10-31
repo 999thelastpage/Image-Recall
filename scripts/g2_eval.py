@@ -40,25 +40,26 @@ def corrupt(cap: str, mapping: dict) -> tuple[str, str, str] | None:
     return None
 
 
-def pick_cases(captions: dict, by_file: dict) -> list[dict]:
+def pick_cases(captions: dict, by_file: dict, per_kind: int = 10,
+               n_accurate: int = 10) -> list[dict]:
     colour, obj, acc = [], [], []
     for fname in sorted(captions):
         if fname not in by_file:
             continue
         cap = captions[fname]
         c = corrupt(cap, COLOUR_WRONG)
-        if c and len(colour) < 30:
+        if c and len(colour) < 90:
             colour.append({"file": fname, "kind": "colour", "query": c[0],
                            "true": c[1], "wrong": c[2]})
         o = corrupt(cap, OBJECT_WRONG)
-        if o and len(obj) < 30:
+        if o and len(obj) < 90:
             obj.append({"file": fname, "kind": "object", "query": o[0],
                         "true": o[1], "wrong": o[2]})
-        if len(acc) < 30 and len(cap.split()) >= 6:
+        if len(acc) < 90 and len(cap.split()) >= 6:
             acc.append({"file": fname, "kind": "accurate", "query": cap,
                         "true": "", "wrong": ""})
     spread = lambda xs, n: xs[:: max(1, len(xs) // n)][:n]  # noqa: E731
-    return spread(colour, 10) + spread(obj, 10) + spread(acc, 10)
+    return spread(colour, per_kind) + spread(obj, per_kind) + spread(acc, n_accurate)
 
 
 def simulate(session, case: dict) -> None:
@@ -78,7 +79,16 @@ def simulate(session, case: dict) -> None:
 
 
 def main() -> int:
+    import argparse
+
     import numpy as np
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--per-kind", type=int, default=10,
+                    help="wrong-colour and wrong-object cases each")
+    ap.add_argument("--rerank", action="store_true",
+                    help="apply the product's doubt-aware top-40 rerank")
+    args = ap.parse_args()
 
     from backend.recall.clues import Clue
     from backend.recall.embeddings import MetaClipEncoder
@@ -93,7 +103,7 @@ def main() -> int:
                        np.load("embeddings/coco_val2017.npy"))
     caps = json.loads(Path("data/coco/captions.json").read_text())
     by_file = {Path(e.path).name: e.image_id for e in entries}
-    cases = pick_cases(caps, by_file)
+    cases = pick_cases(caps, by_file, per_kind=args.per_kind)
     print(f"{len(cases)} cases "
           f"({sum(c['kind'] == 'colour' for c in cases)} colour, "
           f"{sum(c['kind'] == 'object' for c in cases)} object, "
@@ -118,6 +128,21 @@ def main() -> int:
         # final rank within full candidate list, not just top-5 print
         full_rank = next((r for r, c in enumerate(s.candidates, 1)
                           if c.image_id == target), None)
+        if args.rerank:
+            from backend.recall.questions import NOT_SURE
+            from backend.recall.rerank import MuseReranker, doubt_aware_description
+
+            dropped = [s.clues[i].text for i in sorted(s.dropped)]
+            corrections = [
+                (s.clues[a.clue_index].text, a.value) for a in s.answers
+                if a.kind == "attribute" and a.clue_index is not None
+                and a.value != NOT_SURE]
+            desc = doubt_aware_description(case["query"], dropped, corrections)
+            paths = {e.image_id: e.path for e in entries}
+            ranked = MuseReranker(muse, max_workers=8).rerank(
+                s.candidates, paths, desc, top_n=40, weight=0.65)
+            full_rank = next((r for r, x in enumerate(ranked, 1)
+                              if x.image_id == target), None)
         recall_hit = full_rank is not None and full_rank <= 5
         rows.append({**case, "base_hit": base_hit, "recall_hit": recall_hit,
                      "base_rank": base_rank, "final_rank": full_rank})

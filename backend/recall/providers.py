@@ -89,6 +89,7 @@ class MuseClient:
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "reasoning_effort": "low",
+                "temperature": 0,  # deterministic: eval scores must not drift run to run
             },
         )
         return out["choices"][0]["message"]["content"] or ""
@@ -113,6 +114,7 @@ class MuseClient:
                 ],
                 "max_tokens": max_tokens,
                 "reasoning_effort": "low",
+                "temperature": 0,
             },
         )
         return out["choices"][0]["message"]["content"] or ""

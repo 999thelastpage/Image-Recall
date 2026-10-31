@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Recall works — the idea in simple words</title>
+<style>
+  :root{
+    --bg:#f4f4f2; --card:#ffffff; --ink:#1c1e1c; --soft:#4d554d; --faint:#8a918a;
+    --line:#e2e4e0; --accent:#c8500a; --accent-dark:#a63f05;
+    --good:#177245; --good-bg:#e5f3ea; --warn-bg:#fdf0e4;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  a{color:var(--accent-dark)}
+  header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .bar{max-width:1080px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+  .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
+  .logo span{color:var(--accent)}
+  .bar .spacer{flex:1}
+  main{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:32px;line-height:1.15;letter-spacing:-.02em;margin:6px 0 8px;max-width:700px}
+  h2{font-size:22px;margin:38px 0 8px;letter-spacing:-.01em}
+  h3{font-size:17px;margin:20px 0 6px}
+  p{max-width:720px}
+  .lede{color:var(--soft);font-size:17px;max-width:640px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .note{background:var(--warn-bg);border:1px solid #f0c491;border-radius:var(--radius);padding:14px 18px;margin:14px 0;max-width:760px}
+  /* hover flow diagram */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:14px 0 10px}
+  .step{background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;
+        width:172px;cursor:pointer;outline:none}
+  .step b{display:block;font-size:14.5px;line-height:1.3}
+  .step small{color:var(--soft);font-size:12.5px;line-height:1.35;display:block;margin-top:3px}
+  .step:hover,.step:focus{border-color:var(--accent);background:#fffaf5}
+  .step .n{display:inline-block;background:var(--accent);color:#fff;font-size:11px;font-weight:800;
+           border-radius:999px;padding:1px 8px;margin-bottom:5px}
+  .arrow{align-self:center;color:var(--accent);font-weight:800;font-size:18px}
+  .hvpanel{background:var(--ink);color:#f2f2ee;border-radius:10px;padding:14px 16px;max-width:760px;min-height:64px}
+  .hvpanel b{color:#ffb27a}
+  .hvpanel p{margin:3px 0 0;color:#e6e6e0;max-width:none}
+  /* branch diagram */
+  .facts{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .fact{background:#f1efe9;border-radius:999px;padding:3px 12px;font-size:13.5px}
+  .fact.off{background:#f6d9d2;color:#8c3a22;text-decoration:line-through}
+  .branchrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:7px 0}
+  .branchrow .tag{font-size:12px;font-weight:800;color:var(--soft);width:118px}
+  /* parts list */
+  .part{display:flex;gap:14px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:8px 0;cursor:pointer;max-width:820px}
+  .part:hover,.part:focus{border-color:var(--accent);background:#fffaf5;outline:none}
+  .part b{min-width:170px;font-size:15px}
+  .part span{color:var(--soft);font-size:14.5px}
+  /* steps + tests */
+  ol.steps{max-width:760px;padding-left:22px}
+  ol.steps li{margin:5px 0}
+  .test{border:1px solid var(--line);border-radius:10px;background:#fff;padding:14px 18px;margin:10px 0;max-width:820px}
+  .test b.t{font-size:15.5px}
+  .test p{margin:4px 0;max-width:none}
+  .test .see{color:var(--good)}
+  code{background:#f1efe9;border-radius:5px;padding:1px 6px;font-size:13.5px}
+  footer{max-width:1080px;margin:0 auto;padding:0 20px 34px;color:var(--faint);font-size:13px}
+  @media (max-width:640px){h1{font-size:26px}.part{flex-direction:column;gap:2px}.part b{min-width:0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">Recall<span>.</span></div>
+    <span style="color:var(--soft);font-size:14px">how it works, in simple words</span>
+    <div class="spacer"></div>
+    <a href="/" style="font-weight:600">← Back to search</a>
+  </div>
+</header>
+<main>
+  <h1>Recall finds the photo you remember — even if one detail is wrong.</h1>
+  <p class="lede">This page uses simple words on purpose. It follows the
+  ASD-STE100 idea: short sentences, common words, one idea in each sentence.
+  Move your mouse over the boxes. Each box tells you more.</p>
+
+  <h2>1. The problem</h2>
+  <p>You remember a photo. One detail in your memory is wrong. You remember a
+  red bus, but the bus is blue. Normal search trusts all your words. It searches
+  for a red bus. It does not find your photo.</p>
+  <p>Recall works in a different way. Recall thinks: one detail can be wrong.
+  Recall tests your description again and again. Each time, Recall removes one
+  detail. Then Recall asks you small questions. At the end, Recall shows the
+  photo and shows the proof.</p>
+
+  <h2>2. How the engine works — the full path</h2>
+  <p>Move over each step. The black box under the diagram explains the step.</p>
+  <div class="flow" id="flowMain">
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 1 — You write" data-d="You write the photo from memory. You can make an error. That is normal. Example: 'three red buses on a city street'."><span class="n">1</span><b>You write</b><small>what you remember</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 2 — Muse cuts the text into facts" data-d="Muse Spark is a language model from Meta. It cuts your text into small facts: the thing, its colour, the count, the place, the action. Each fact can be wrong alone."><span class="n">2</span><b>Muse cuts facts</b><small>thing, colour, count, place</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 3 — Recall makes many searches" data-d="Recall makes one search with all facts. Then Recall makes one search for each removed fact. If 'red' is wrong, the search without 'red' can find the bus."><span class="n">3</span><b>Many searches</b><small>one per removed fact</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 4 — MetaCLIP finds photos" data-d="MetaCLIP is a model from Meta. It turns photos and words into numbers. Words and photos with near numbers are a good match. It searches all photos very fast — about 0.07 seconds for 82,783 photos."><span class="n">4</span><b>MetaCLIP finds</b><small>words vs photos, by numbers</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 5 — Recall joins the results" data-d="Each search has its own best photos. Recall joins them into one list. No photo is deleted. A photo found by many searches gets a strong place."><span class="n">5</span><b>Recall joins</b><small>one list, nothing deleted</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 6 — Recall asks you" data-d="Recall asks a maximum of 3 questions. Example: 'Which detail can be wrong?' Your answer gives more weight to the searches without that detail. 'Not sure' is a good answer too. It changes nothing."><span class="n">6</span><b>Max 3 questions</b><small>your answers fix the order</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 7 — SAM checks the top photos" data-d="SAM 3.1 is a vision model from Meta. It finds the thing in the photo and draws a box around it. Recall counts the boxes. Recall reads the colour in the box. Muse looks at the photo and checks place and action facts."><span class="n">7</span><b>SAM checks</b><small>boxes, count, colour</small></div>
+    <div class="arrow">→</div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 8 — You see photo and proof" data-d="You see the best photos first. You also see simple proof lines: 'Found 3 buses. You said 3. Colour is brown. You said red.' You can trust the result, because you can check it."><span class="n">8</span><b>Photo + proof</b><small>you can check every word</small></div>
+  </div>
+  <div class="hvpanel" id="panelMain"><b>Move over a step.</b><p>Each step will explain itself here, in simple words.</p></div>
+
+  <h2>3. The main trick — remove one fact at a time</h2>
+  <p>Your description has facts. In this example, the facts are A, B, C, D.
+  Recall does not make one search. Recall makes many searches. Each search
+  removes a different fact. Move over a row to see why.</p>
+  <div class="card">
+    <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="All facts: A + B + C + D" data-d="This is your description with no change. It works when your memory is fully right."><span class="tag">ALL FACTS</span><span class="facts"><span class="fact">A thing</span><span class="fact">B colour</span><span class="fact">C count</span><span class="fact">D place</span></span></div>
+    <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove A" data-d="This search works when the thing is wrong. Example: you remember a bus, but it is a tram. Recall asks you for a new thing. It does not only remove the main thing."><span class="tag">REMOVE A</span><span class="facts"><span class="fact off">A thing</span><span class="fact">B colour</span><span class="fact">C count</span><span class="fact">D place</span></span></div>
+    <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove B" data-d="This search works when the colour is wrong. Example: you remember red, but the bus is brown. This is the most common memory error."><span class="tag">REMOVE B</span><span class="facts"><span class="fact">A thing</span><span class="fact off">B colour</span><span class="fact">C count</span><span class="fact">D place</span></span></div>
+    <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove C" data-d="This search works when the count is wrong. Example: you remember three buses, but there are two."><span class="tag">REMOVE C</span><span class="facts"><span class="fact">A thing</span><span class="fact">B colour</span><span class="fact off">C count</span><span class="fact">D place</span></span></div>
+    <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove D" data-d="This search works when the place is wrong. Example: you remember a city street, but it is a bus station."><span class="tag">REMOVE D</span><span class="facts"><span class="fact">A thing</span><span class="fact">B colour</span><span class="fact">C count</span><span class="fact off">D place</span></span></div>
+    <p style="color:var(--soft);font-size:14px;margin-bottom:0">Then Recall joins all five lists. Your answers give more weight to the right lists. No list can delete a photo.</p>
+  </div>
+  <div class="hvpanel" id="panelBranch"><b>Move over a row.</b><p>Each row is one search.</p></div>
+
+  <h2>4. The parts and what they do</h2>
+  <p>Move over a part. The name is on the left. The job is on the right.</p>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="Muse Spark — the brain for words" data-d="Muse Spark reads your text. It cuts the text into facts. It also reads the top photos at the end and gives a second opinion on the order. It is a Meta model. It works only with an API key. With no key, Recall uses a simple offline method."><b>Muse Spark</b><span>Reads your words. Cuts them into facts. Gives a second opinion on the best photos.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="MetaCLIP — the eyes for search" data-d="MetaCLIP turns each photo into 768 numbers, one time. It turns your words into numbers too. Near numbers mean a good match. This part works on your computer. Your photos do not go to the internet for this step."><b>MetaCLIP-L14</b><span>Turns photos and words into numbers. Finds the near matches. Very fast.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="SAM 3.1 — the checker" data-d="SAM finds the thing in a photo and draws boxes. One box for each thing it finds. Recall counts the boxes. Recall reads the colour inside the first box. This makes the proof you can see and check."><b>SAM 3.1</b><span>Finds things in photos. Draws boxes. This gives count and colour proof.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="The questions — the repair" data-d="Recall asks a maximum of 3 questions. Question 1 asks which detail can be wrong. Later questions ask for the correct detail. Each answer changes the weight of the searches. Answers never delete photos."><b>3 questions</b><span>Ask which detail can be wrong. Fix the order with your answers.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="The proof card — trust you can check" data-d="For the top 3 photos, Recall writes simple lines: what it found, how many, what colour, and if the place and action are right. If a line is not sure, it says 'can't tell either way'. Recall does not invent proof."><b>Proof card</b><span>Simple lines for the top 3 photos: found, count, colour, place. Nothing invented.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="Your photos — private by design" data-d="On your computer, you can add a folder. Recall makes small copies and numbers for each photo (about 2 KB of numbers per photo). The big originals stay in place. In the public demo, this part is off."><b>Your folder</b><span>Add your own photos on your computer. Small copies only. Originals stay in place.</span></div>
+  <div class="hvpanel" id="panelParts"><b>Move over a part.</b><p>The part will explain its job here.</p></div>
+
+  <h2>5. New: Find my proof</h2>
+  <p>Sometimes you do not search for a memory. You search for proof. You know
+  the photo exists. You need it for a claim, a deposit, or an argument. But you
+  remember it a bit wrong — the wrong month, the wrong colour.</p>
+  <p>Proof Finder is Recall with one job: find that photo and prove it.
+  The search is the same engine. The questions fix your wrong details.
+  At the end, you tap <b>Show the proof</b>. Recall checks the top 3 photos
+  and writes what is true: the thing, the count, the colour, the place.</p>
+  <div class="note"><b>Use it like this:</b>
+    <ol class="steps" style="margin-bottom:0">
+      <li>On the home page, tap <b>Find my proof</b>.</li>
+      <li>Write the proof photo from memory. One wrong detail is OK.</li>
+      <li>Answer the questions. Tap <b>Show the proof</b> at the end.</li>
+    </ol>
+  </div>
+  <p>Real life examples: the photo of the wall before the repair (insurance),
+  the room on the day you moved in (deposit), the broken part before you fixed
+  it (warranty). In this demo library, try the cake, the cat, and the tennis
+  examples under <b>Find my proof</b>.</p>
+
+  <h2>6. Use the tool — features and tests</h2>
+  <p>Each test takes one or two minutes. Do the test. Check what you see.
+  The demo library has 5,000 photos. On your own computer, you can also use
+  the big library and your own folders.</p>
+
+  <div class="test"><b class="t">Test 1 — Compare both (see the difference)</b>
+    <p>Do: tap <b>Compare both</b>. Write <code>a big purple bus parked in a parking spot</code>. Tap <b>Search my photos</b>.</p>
+    <p class="see">You see: two lists side by side. Simple search gives results in about 0.1 seconds. Recall needs some seconds — it splits your words first. Green marks show photos that only Recall found. The purple colour is wrong on purpose: the real bus is not purple.</p></div>
+
+  <div class="test"><b class="t">Test 2 — Ask me questions (the repair)</b>
+    <p>Do: tap <b>Ask me questions</b>. Write <code>three red buses on a city street</code>. Answer question 1: pick the colour detail. Then answer the next questions.</p>
+    <p class="see">You see: the order of photos changes after each answer. Arrows show photos that moved up or down. Nothing is deleted. At most 3 questions.</p></div>
+
+  <div class="test"><b class="t">Test 3 — Find my proof</b>
+    <p>Do: tap <b>Find my proof</b>. Tap the example <code>prove the cat did it</code>. Answer the questions. At the end tap <b>Show the proof (top 3 photos)</b>.</p>
+    <p class="see">You see: simple proof lines for 3 photos — what Recall found, how many, and the facts it checked. This is the text you can show to another person.</p></div>
+
+  <div class="test"><b class="t">Test 4 — The AI double-check</b>
+    <p>Do: finish Test 2 or Test 3. Tap <b>Double-check top 10 with AI</b>. Wait about 15 seconds.</p>
+    <p class="see">You see: Muse reads the top 10 photos and makes a new order. Each photo shows its AI score out of 10.</p></div>
+
+  <div class="test"><b class="t">Test 5 — The secret target game (test like a judge)</b>
+    <p>Do: open the <a href="/picker.html" target="_blank">secret target picker</a>. Pick one photo. Do not tell the tool. Go back and search for it from memory — make one detail wrong on purpose. Use <b>Ask me questions</b>.</p>
+    <p class="see">You see: at the end, the tool tells you the place of your secret photo in the final top 5. The tool never knows your pick. The pick stays in your browser.</p></div>
+
+  <div class="test"><b class="t">Test 6 — Your own folder (only on your computer)</b>
+    <p>Do: on the home page, tap <b>Choose folder…</b> and pick a photo folder. Wait for the bar to finish. Then search your photos with words.</p>
+    <p class="see">You see: a new library in the list at the top. Search works on your photos. Only small copies and numbers stay on disk (about 2 KB per photo). Your big originals do not move. This test is off in the public demo.</p></div>
+
+  <h2>7. Numbers we measured</h2>
+  <p>We do not invent numbers. These come from tests on this computer.
+  The big score test has 60 hard cases. In each case, one detail is
+  wrong: a colour or a thing.</p>
+  <div class="card">
+    <p style="margin-top:0"><b>Wrong detail test:</b> simple search finds the photo in the top 5 in 36 of 60 cases. Recall with questions and the AI check finds it in 43 of 60 cases. Wrong colour is the hardest: 21 of 30. We say this plain: it is good, it is not perfect.</p>
+    <p><b>Speed:</b> one search over 82,783 photos takes about 0.07 seconds. All Recall searches together take under 0.1 seconds. The slow part is the Muse word step (some seconds). The same question a second time takes about 0.06 seconds in total.</p>
+    <p style="margin-bottom:0"><b>Photo sets:</b> 5,000 photos in the public demo. 82,783 photos in the big test set on this computer. Same engine, same numbers format (768 numbers per photo).</p>
+  </div>
+
+  <h2>8. What is next — video</h2>
+  <p>A video is many photos in a row. So the same engine can search video:
+  Recall takes the important pictures from the video, and searches them like
+  photos. The answer is not a photo. The answer is a moment: “look at second
+  01:23”. This part is <b>not built yet</b>. We build it next, after the
+  public demo is live. We write this here so you know what is real today and
+  what is a plan.</p>
+
+  <h2>9. Limits — in simple words</h2>
+  <p>Recall is not magic. A very wrong description can still fail. The big
+  82,783-photo set is hard: even the best first search is often wrong, and
+  questions fix only part of it. The colour check reads colour inside the
+  SAM box; bad light can fool it. The proof lines say “can't tell either way”
+  when the check is not sure. We think honest limits make a tool strong.</p>
+</main>
+<footer>Recall — find the photo you remember wrong. Muse Spark and SAM 3.1 by Meta (hosted API). MetaCLIP open weights. This page: simple words, ASD-STE100 style.</footer>
+<script>
+  document.querySelectorAll('.hv').forEach(el => {
+    const show = () => {
+      const panel = document.getElementById(el.dataset.panel);
+      if (panel) panel.innerHTML = '<b>' + el.dataset.t + '</b><p>' + el.dataset.d + '</p>';
+    };
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('focus', show);
+    el.addEventListener('click', show);
+  });
+</script>
+</body>
+</html>
+

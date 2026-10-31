@@ -63,12 +63,23 @@ chips. SAM 3.1: exact box in 1.8s.
 Gate G1 (10 hand-made wrong-colour cases, 5k corpus): branch
 union contains the target **9/10** vs plain-search Hit@5 6/10.
 
-Gate G2 (30 cases: 10 wrong-colour, 10 wrong-object, 10
-accurate; simulated truthful user, ≤3 questions): wrong-clue
-Hit@5 **10/20 → 13/20** after the session loop. Colour repair
-5→8. A first run failed (9/20) because dropping the main object
-noun destroys a query; the shipped rule is now *modifiers are
-dropped, anchors are replaced*, with a regression test.
+Gate G2, expanded (60 wrong-clue cases: 30 wrong-colour, 30
+wrong-object, +10 accurate; simulated truthful user, ≤3 questions,
+doubt-aware Muse rerank of the top 40 at finish): wrong-clue
+Hit@5 **36/60 → 43/60** (colour 19→21, object 17→22, accurate
+4/10 → 5/10). Earlier 20-case runs read 13/20 and, on re-run,
+8/20 — the small set was noise, so the 60-case number is the one
+to quote. Failure layers were measured per case (coverage /
+answer-demotion / ranking / encoder ceiling): answers can no
+longer lower a candidate's score, every candidate is rescored
+under the revised query, and the branch quota at 5k is 150.
+Ceiling, also measured: with the *true* caption the encoder puts
+the target in the top 5 in only 15/20 diagnostic cases, so 90%+
+on wrong-clue cases is not reachable with this encoder; the next
+lever is an encoder swap judged on that ceiling first. A first
+run failed (9/20) because dropping the main object noun destroys
+a query; the shipped rule is now *modifiers are dropped, anchors
+are replaced*, with a regression test.
 
 Corpus scale vs quality (100 own-caption queries per corpus,
 `scripts/quality_check.py`). Encoder upgraded B32 → L14 on
@@ -112,10 +123,10 @@ reported with their layer, not hidden.
 
 Done: G0 (API + encoder gates), Day 1 engine (Gate G1), encoder
 upgrade B32→L14, Day 2 session loop + target picker (Gate G2),
-Day 3 Muse rerank (wrong-clue Hit@5 5/12 → 6/12 on the eval
-subset) + SAM in-box colour evidence, live in the console.
+Day 3 Muse rerank + SAM evidence, live in the console; rerank
+is now automatic and doubt-aware at session finish (top 40).
 Live corpora in this workspace: 5,000 COCO val + 82,783 COCO
-train2014, both on MetaCLIP-L14. Tests: 24 passing.
+train2014, both on MetaCLIP-L14. Tests: 39 passing.
 
 Remaining (human steps): deploy `deploy/modal_app.py` with a
 Modal token and put the URL here + in the video description;

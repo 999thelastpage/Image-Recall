@@ -68,5 +68,9 @@ def weighted_rerank(
             (weights.get(b, 1.0) * s for b, s in c.branch_scores.items()),
             default=c.score,
         )
+        # Floor: an answer may reorder, but it must never lower a
+        # candidate's own score — demotion by omission was measured
+        # pushing targets from #2 to #52.
+        best = max(best, c.score)
         out.append(Candidate(c.image_id, best, list(c.branches), dict(c.branch_scores)))
     return sorted(out, key=lambda c: (-c.score, c.image_id))

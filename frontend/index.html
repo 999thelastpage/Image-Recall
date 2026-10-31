@@ -147,6 +147,7 @@
   <div class="bar">
     <div class="logo">Recall<span>.</span></div>
     <span class="liblabel">finds the photo you remember wrong</span>
+    <a class="liblabel" href="/details.html" style="color:var(--accent-dark);font-weight:600">How it works</a>
     <div class="spacer"></div>
     <label class="liblabel" for="corpus">Photo library</label>
     <select id="corpus"></select>
@@ -167,11 +168,18 @@
       <button class="ex" data-q="a birthday cake with candles on a kitchen table">birthday cake</button>
       <button class="ex" data-q="people eating pizza outside at night under string lights">pizza at night</button>
     </div>
+    <div class="examples" id="proofExamples" hidden>
+      <span class="lbl">Proof hunts — you know it exists, you remember it a bit wrong:</span>
+      <button class="ex" data-q="a birthday cake with lit candles on a kitchen table">prove the party happened</button>
+      <button class="ex" data-q="a cat sitting on a laptop keyboard on a desk">prove the cat did it</button>
+      <button class="ex" data-q="a man holding a tennis racket on a court">prove he played</button>
+    </div>
     <div class="controls">
       <div class="seg" id="modeSeg">
         <button data-mode="baseline">Simple search</button>
         <button data-mode="both" class="on">Compare both</button>
         <button data-mode="session">Ask me questions</button>
+        <button data-mode="proof">Find my proof</button>
       </div>
       <button class="primary" id="searchBtn">Search my photos</button>
       <span class="seghelp" id="modeHelp">Side by side: simple search trusts every word — Recall doubts each detail.</span>
@@ -253,8 +261,10 @@ let mode = 'both', sessionId = null, initialRank = {}, jobTimer = null;
 const MODE_HELP = {
   baseline: 'One quick search that believes your description exactly as written.',
   both: 'Side by side: simple search trusts every word — Recall doubts each detail.',
-  session: 'Recall asks up to 3 quick questions, fixing the ranking as you answer.'
+  session: 'Recall asks up to 3 quick questions, fixing the ranking as you answer.',
+  proof: 'You know the photo exists — you just remember it a bit wrong. Recall hunts it down, then shows you the proof.'
 };
+let proofMode = false;
 
 async function loadCorpora(selectName){
   const list = await (await fetch('/api/corpora')).json();
@@ -278,6 +288,7 @@ $('modeSeg').onclick = e => {
   mode = m;
   [...$('modeSeg').children].forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   $('modeHelp').textContent = MODE_HELP[m];
+  $('proofExamples').hidden = m !== 'proof';
 };
 
 /* ---------- ingest ---------- */
@@ -350,7 +361,7 @@ function renderGrid(el, items, otherIds){
 
 /* ---------- search ---------- */
 $('searchBtn').onclick = async () => {
-  if (mode === 'session') return startSession();
+  if (mode === 'session' || mode === 'proof') return startSession(mode === 'proof');
   $('err').textContent = '';
   const body = {query: $('query').value.trim(), corpus: $('corpus').value, mode, top_k: 12};
   if (!body.query){ $('err').textContent = 'Describe the photo first.'; return; }
@@ -469,7 +480,8 @@ function renderSession(snap){
     return card(it, i + 1, {topScore, move});
   }).join('');
 }
-async function startSession(){
+async function startSession(proof = false){
+  proofMode = proof;
   $('err').textContent = ''; $('explain').classList.remove('show'); $('evidenceLine').textContent = ''; $('scoreLine').textContent = '';
   const body = {query: $('query').value.trim(), corpus: $('corpus').value};
   if (!body.query){ $('err').textContent = 'Describe the photo first.'; return; }
@@ -483,6 +495,13 @@ async function startSession(){
   $('enhanceRow').hidden = true;
   snap.results.forEach((it, i) => initialRank[it.image_id] = i + 1);
   renderSession(snap);
+  if (proofMode){
+    $('resultsTitle').textContent = 'Find the proof: your photo, checked as you answer';
+    $('statsLine').textContent = 'Answer up to 3 questions. At the end, tap “Show the proof” — Recall checks the top 3 photos and tells you what is true in them.';
+    $('evidenceBtn').textContent = 'Show the proof (top 3 photos)';
+  } else {
+    $('evidenceBtn').textContent = 'Show me the evidence (top 3)';
+  }
   $('sessionCard').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 async function answerSess(value){

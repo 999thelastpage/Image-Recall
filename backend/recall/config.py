@@ -9,9 +9,10 @@ BRANCH_TOP_K = 50  # reserved per-branch candidate quota (small corpora)
 
 def branch_quota(corpus_size: int) -> int:
     """Per-branch quota scales with corpus size: a fixed top-50
-    starves the union at 83k+ (measured failure layer: coverage)."""
+    starves the union (measured failure layer: coverage — targets
+    sat at rank 50-150 of their drop-branch and never entered)."""
     if corpus_size <= 10_000:
-        return 50
+        return 150
     if corpus_size <= 100_000:
         return 150
     return 250

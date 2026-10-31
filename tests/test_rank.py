@@ -28,6 +28,20 @@ def test_dropped_clue_branch_surfaces_target():
     assert "drop:0" in by_id["img-000000"].branches
 
 
+def test_doubt_aware_description_carries_corrections():
+    from backend.recall.rerank import doubt_aware_description
+
+    desc = doubt_aware_description(
+        "three red buses on a city street",
+        ["city street"],
+        [("red buses", "brown buses")],
+    )
+    assert desc.startswith("three red buses")
+    assert "may be wrong about: city street" in desc
+    assert "'red buses' to 'brown buses'" in desc
+    assert doubt_aware_description("a dog", [], []) == "a dog"
+
+
 def test_union_keeps_provenance_and_best_score():
     enc = StubEncoder()
     index = _fixture_index(enc)
@@ -39,6 +53,22 @@ def test_union_keeps_provenance_and_best_score():
     assert top.image_id == "img-000000"
     assert "original" in top.branches
     assert top.score > 0.99
+
+
+def test_weighted_rerank_never_lowers_a_score():
+    from backend.recall.rank import Candidate, weighted_rerank
+
+    cands = [
+        Candidate("a", 0.30, ["original"], {"original": 0.30}),
+        Candidate("b", 0.90, ["original", "drop:0"],
+                  {"original": 0.90, "drop:0": 0.10}),
+    ]
+    out = weighted_rerank(cands, {"drop:0": 1.6})
+    by_id = {c.image_id: c for c in out}
+    # 'a' is not in the boosted branch: its score must not fall,
+    # even though 'b' may pass it.
+    assert by_id["a"].score >= 0.30
+    assert by_id["b"].score >= 0.90
 
 
 def test_providers_disabled_without_key(monkeypatch):

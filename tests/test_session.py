@@ -72,6 +72,18 @@ def test_finish_explanation_when_anchor_doubted_not_replaced():
     assert "matched the original" not in out["explanation"]
 
 
+def test_answer_rescores_every_candidate_and_never_lowers_scores():
+    s = _session()
+    before = {c.image_id: c.score for c in s.candidates}
+    s.answer("beach")  # drop a modifier -> revised query re-entry
+    after = {c.image_id: c for c in s.candidates}
+    for iid, old in before.items():
+        # every pre-existing candidate was rescored under 'revised'
+        assert "revised" in after[iid].branch_scores
+        # and its final score did not fall
+        assert after[iid].score >= old - 1e-9
+
+
 def test_not_sure_is_neutral():
     s = _session()
     top_before = s.candidates[0].image_id

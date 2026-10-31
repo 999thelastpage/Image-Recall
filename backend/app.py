@@ -465,12 +465,46 @@ def answer_session(session_id: str, req: AnswerRequest) -> dict:
     return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
 
 
+def _doubt_aware(s) -> str:
+    from backend.recall.questions import NOT_SURE
+    from backend.recall.rerank import doubt_aware_description
+
+    dropped = [s.clues[i].text for i in sorted(s.dropped)]
+    corrections = [
+        (s.clues[a.clue_index].text, a.value)
+        for a in s.answers
+        if a.kind == "attribute" and a.clue_index is not None
+        and a.value != NOT_SURE
+    ]
+    return doubt_aware_description(s.description, dropped, corrections)
+
+
 @app.post("/api/session/{session_id}/finish")
 def finish_session(session_id: str) -> dict:
     rec = _get_rec(session_id)
-    out = rec["session"].finish()
+    s = rec["session"]
+    out = s.finish()
     _save_session(rec)
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
+    # Automatic doubt-aware rerank of the top 40: measured rescuing
+    # failures the encoder order could not. Best-effort — without a
+    # Muse key the encoder order stands and we say so.
+    out["reranked"] = False
+    try:
+        from backend.recall.rerank import MuseReranker
+
+        paths = {i: e.path for i, e in entries.items()}
+        ranked = MuseReranker(MuseClient(), max_workers=8).rerank(
+            s.candidates, paths, _doubt_aware(s), top_n=40, weight=0.65)
+        out["results"] = [
+            {"image_id": r.image_id, "score": round(r.final, 4),
+             "muse_score": (None if r.muse is None else round(r.muse, 2)),
+             "branches": r.branches}
+            for r in ranked[:5]
+        ]
+        out["reranked"] = True
+    except Exception:  # noqa: BLE001 — rerank is an enhancement, not a gate
+        pass
     for r in out["results"]:
         e = entries.get(r["image_id"])
         r["url"] = f"/api/image/{rec['corpus']}/{r['image_id']}"
@@ -487,7 +521,8 @@ def rerank_session(session_id: str) -> dict:
     try:
         from backend.recall.rerank import MuseReranker
 
-        out = MuseReranker(MuseClient()).rerank(s.candidates, paths, s.description)
+        out = MuseReranker(MuseClient()).rerank(
+            s.candidates, paths, _doubt_aware(s))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(503, f"rerank unavailable: {type(e).__name__}") from e
     return {

@@ -67,6 +67,13 @@ class ExactIndex:
             self._rank(all_scores[:, j], top_k) for j in range(all_scores.shape[1])
         ]
 
+    def score_rows(self, query: np.ndarray, rows: list[int]) -> np.ndarray:
+        """Cosine of one query against chosen embedding rows — used to
+        rescore every union candidate under a revised query, so no
+        candidate is invisible just because a top-k cut excluded it."""
+        q = np.asarray(query, dtype=np.float32).ravel()
+        return self.embeddings[rows] @ q
+
     def rank_of(self, query: np.ndarray, image_id: str) -> int | None:
         """1-based rank of an image under a query (evaluation only;
         never called from the search session path)."""

@@ -112,6 +112,26 @@ class SearchSession:
         if self.pending is None or len(self.answers) >= MAX_QUESTIONS:
             self.status = "done" if self.pending is None else "asking"
 
+    def _rescore_all(self, label: str, query) -> None:
+        """Give EVERY candidate a score under the revised query.
+
+        Branch re-entry only merges the revised query's top-k; a
+        candidate outside that cut used to get no score from the
+        boosted branch and sank when others were weighted up. One
+        matvec over the union removes that blindness."""
+        pos = {iid: r for r, iid in enumerate(self.index.image_ids)}
+        rows = [pos[c.image_id] for c in self.candidates
+                if c.image_id in pos]
+        cands = [c for c in self.candidates if c.image_id in pos]
+        if not rows:
+            return
+        scores = self.index.score_rows(query, rows)
+        for c, s in zip(cands, scores, strict=True):
+            c.branch_scores[label] = max(float(s),
+                                         c.branch_scores.get(label, float(s)))
+            if label not in c.branches:
+                c.branches.append(label)
+
     def _drop_clue(self, i: int) -> None:
         self.dropped.add(i)
         self.weights[f"drop:{i}"] = W_DROPPED
@@ -123,6 +143,8 @@ class SearchSession:
             q = self.encoder.encode_texts([hyp.query_text])
             fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
             self._merge(fresh)
+            self.weights["revised"] = W_DROPPED
+            self._rescore_all("revised", q)
 
     def _replace_clue(self, i: int, value: str) -> None:
         parts = [
@@ -135,6 +157,7 @@ class SearchSession:
         fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
         self.weights[f"answer:{i}"] = W_DROPPED
         self._merge(fresh)
+        self._rescore_all(hyp.label, q)
 
     def _merge(self, fresh: list[Candidate]) -> None:
         by_id = {c.image_id: c for c in self.candidates}
