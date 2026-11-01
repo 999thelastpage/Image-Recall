@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+RAW_LABEL = "raw"
+
 COLOUR_WORDS = ["red", "orange", "yellow", "green", "blue", "purple",
                 "pink", "brown", "black", "white", "gray", "grey", "gold"]
 COUNT_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4,
@@ -177,6 +179,16 @@ def _relaxed_text(clue: Clue) -> str | None:
         out = " ".join(out.split())
         return out if out and out.lower() != clue.text.lower() else None
     return None
+
+
+def recall_hypotheses(description: str, clues: list[Clue],
+                      substitution_colours: tuple[str, ...] | None = None,
+                      max_substitutions: int = 2) -> list[Hypothesis]:
+    """The user's own sentence first, then the clue branches: the
+    sentence is the query plain search would run, so it is never lost."""
+    raw = Hypothesis(RAW_LABEL, description, None)
+    rest = hypotheses(clues, substitution_colours, max_substitutions)
+    return [raw] + [h for h in rest if h.query_text != description]
 
 
 def hypotheses(clues: list[Clue],

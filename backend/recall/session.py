@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .clues import Clue, Hypothesis, hypotheses
+from .clues import COLOUR_WORDS, Clue, Hypothesis, recall_hypotheses
 from .config import FINAL_TOP_K, MAX_QUESTIONS, branch_quota
 from .questions import (
     CATEGORY_OPTIONS,
@@ -33,7 +33,7 @@ from .questions import (
     subject_question,
     uncertainty_question,
 )
-from .rank import Candidate, branch_union, weighted_rerank
+from .rank import Candidate, branch_union, calibrated_union, weighted_rerank
 from .retrieve import ExactIndex
 
 def _subjectless_score(candidate) -> float:
@@ -46,7 +46,8 @@ def _subjectless_score(candidate) -> float:
     return max(vals) if vals else candidate.score
 
 
-W_DROPPED = 1.6   # branch weight when user doubts that clue
+W_DROPPED = 1.6   # branch weight for a sentence the user corrected
+W_REVISED = 1.2   # branch weight for the sentence without a doubted clue
 W_CONFIRMED = 0.5  # branch weight for dropping a confirmed clue
 ANCHOR_KINDS = {"object", "person"}  # doubted anchors get replaced, not dropped
 
@@ -123,6 +124,7 @@ class SearchSession:
     dimension_checked: bool = False
     doubted_dimension: int | None = None
     dimension_pending: bool = False
+    sentence: str = ""  # the description with the user's corrections applied
     question_history: list[str] = field(default_factory=list)
     needs_details: bool = False
     needs_category: bool = False
@@ -130,12 +132,15 @@ class SearchSession:
 
     # -- setup ----------------------------------------------------
     def start(self) -> None:
-        hyps = hypotheses(self.clues, substitution_colours=tuple(COLOURS),
-                          max_substitutions=2)
+        self.sentence = self.description
+        hyps = recall_hypotheses(self.description, self.clues,
+                                 substitution_colours=tuple(COLOURS),
+                                 max_substitutions=2)
         # One batched encode for all branches, not one call per branch.
         mat = self.encoder.encode_texts([h.query_text for h in hyps])
         queries = list(zip(hyps, mat, strict=True))
-        self.candidates = branch_union(self.index, queries, branch_quota(len(self.index)))
+        self.candidates, self.weights = calibrated_union(
+            self.index, queries, branch_quota(len(self.index)))
         self.status = "asking"
         self.pending = self._plan()
 
@@ -360,6 +365,9 @@ class SearchSession:
                     f"{self.description}; {text}" if self.description.strip()
                     else text
                 )
+                self.sentence = (
+                    f"{self.sentence}; {text}" if self.sentence.strip() else text
+                )
                 self._run_revised_search()
         elif value != NOT_SURE:
             if q.kind == "uncertainty":
@@ -407,64 +415,82 @@ class SearchSession:
         if not rows:
             return
         scores = self.index.score_rows(query, rows)
+        mean, std = self.index.score_stats(query)
         for c, s in zip(cands, scores, strict=True):
-            c.branch_scores[label] = max(float(s),
-                                         c.branch_scores.get(label, float(s)))
+            c.branch_scores[label] = (float(s) - mean) / std
             if label not in c.branches:
                 c.branches.append(label)
 
-    def _run_revised_search(self, extra_terms: list[str] | None = None,
-                            label: str = "revised") -> None:
-        """Whole-corpus re-entry with the subject-less query (all
-        non-dropped clues), then rescore every candidate under it."""
+    def _sentence_without_dropped(self) -> str:
+        """The corrected sentence minus every doubted clue. Rebuilding
+        a query from the remaining fragments can leave a lone 'person',
+        so the sentence is edited instead."""
+        text = self.sentence or self.description
         anchor = self._anchor_index()
-        if anchor is not None and anchor in self.dropped:
-            anchor_clue = self.clues[anchor]
-            words = anchor_clue.text.split()
-            old_ref = anchor_clue.referent.strip() or (words[-1] if words else "")
-            if old_ref:
-                pat = re.compile(r"\b" + re.escape(old_ref) + r"\b", re.I)
-                rest = []
-                for j, c in enumerate(self.clues):
-                    if j in self.dropped:
-                        continue
-                    t = " ".join(pat.sub("", c.text).split()).strip(" ;,")
-                    if len(t) >= 2:
-                        rest.append(t)
-                remainder = " ".join(
-                    pat.sub("", anchor_clue.text).split()).strip(" ;,")
-                if len(remainder) >= 2:
-                    rest.append(remainder)
+        for i in sorted(self.dropped):
+            clue = self.clues[i]
+            noun = clue.referent.strip()
+            if i == anchor and noun:
+                # Doubting the subject doubts the noun: 'purple car' keeps 'purple'.
+                phrases = (noun,)
             else:
-                rest = [c.text for j, c in enumerate(self.clues)
-                        if j not in self.dropped]
-        else:
-            rest = [c.text for j, c in enumerate(self.clues)
-                    if j not in self.dropped]
-        if extra_terms:
-            rest = rest + [t for t in extra_terms if t]
-        if not rest:
-            return
-        hyp = Hypothesis(label, "; ".join(rest), None)
-        q = self.encoder.encode_texts([hyp.query_text])
+                phrases = (clue.text, noun if clue.kind in ANCHOR_KINDS else "")
+            for phrase in phrases:
+                if phrase:
+                    text = re.sub(rf"\b{re.escape(phrase)}\b", " ", text, flags=re.I)
+        return " ".join(text.split()).strip(" ;,")
+
+    def _search_sentence(self, label: str, text: str, weight: float) -> None:
+        """Whole-corpus re-entry with one sentence, then rescore every
+        candidate under it."""
+        hyp = Hypothesis(label, text, None)
+        q = self.encoder.encode_texts([text])
         fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
         self._merge(fresh)
-        self.weights[label] = W_DROPPED
+        self.weights[label] = weight
         self._rescore_all(label, q)
+
+    def _run_revised_search(self, extra_terms: list[str] | None = None,
+                            label: str = "revised") -> None:
+        text = " ".join([self._sentence_without_dropped(), *(extra_terms or [])]).strip()
+        if len(text) >= 2:
+            self._search_sentence(label, text, W_REVISED)
 
     def _drop_clue(self, i: int) -> None:
         self.dropped.add(i)
-        self.weights[f"drop:{i}"] = W_DROPPED
         self.weights["original"] = min(self.weights.get("original", 1.0), 0.8)
-        # Whole-corpus re-entry: revised query without the clue.
         self._run_revised_search()
 
+    def _corrected_sentence(self, i: int, value: str, effective: str,
+                            subject: bool) -> str | None:
+        """The sentence with clue i corrected, or None when the clue's
+        words cannot be found in it."""
+        clue = self.clues[i]
+        text = self.sentence or self.description
+        if subject:
+            words = clue.text.split()
+            old = clue.referent.strip() or (words[-1] if words else "")
+            return _swap_subject(text, old, value, _allow_last_word=False)
+        old = None
+        if clue.kind == "colour" and value.lower() in COLOURS:
+            low = clue.text.lower()
+            old = next((w for w in COLOUR_WORDS if re.search(rf"\b{w}\b", low)), None)
+            new = value
+        elif clue.kind == "count" and value[:1].isdigit() and clue.referent.strip():
+            old = re.sub(rf"\b{re.escape(clue.referent.strip())}\b", "", clue.text,
+                         flags=re.I).strip()
+            new = value
+        if not old:
+            old, new = clue.text, effective
+        pat = re.compile(rf"\b{re.escape(old)}\b", re.I)
+        return pat.sub(new, text) if pat.search(text) else None
+
     def _replace_clue(self, i: int, value: str, subject: bool = False) -> str:
+        parts = []
         if subject:
             clue = self.clues[i]
             words = clue.text.split()
             old_ref = clue.referent.strip() or (words[-1] if words else "")
-            parts = []
             effective = value
             for j, c in enumerate(self.clues):
                 if j in self.dropped:
@@ -493,12 +519,10 @@ class SearchSession:
                 for j, c in enumerate(self.clues)
                 if j not in self.dropped
             ]
-        hyp = Hypothesis(f"answer:{i}", "; ".join(parts), None)
-        q = self.encoder.encode_texts([hyp.query_text])
-        fresh = branch_union(self.index, [(hyp, q)], branch_quota(len(self.index)))
-        self.weights[f"answer:{i}"] = W_DROPPED
-        self._merge(fresh)
-        self._rescore_all(hyp.label, q)
+        corrected = self._corrected_sentence(i, value, effective, subject)
+        if corrected is not None:
+            self.sentence = corrected
+        self._search_sentence(f"answer:{i}", corrected or "; ".join(parts), W_DROPPED)
         return effective
 
     def _merge(self, fresh: list[Candidate]) -> None:
@@ -540,6 +564,7 @@ class SearchSession:
             "dimension_checked": self.dimension_checked,
             "doubted_dimension": self.doubted_dimension,
             "dimension_pending": self.dimension_pending,
+            "sentence": self.sentence,
             "question_history": list(self.question_history),
             "needs_details": self.needs_details,
             "needs_category": self.needs_category,
@@ -577,6 +602,7 @@ class SearchSession:
             any(a.kind == "dimension" for a in s.answers)))
         s.doubted_dimension = data.get("doubted_dimension")
         s.dimension_pending = bool(data.get("dimension_pending", False))
+        s.sentence = data.get("sentence", data["description"])
         s.question_history = list(data.get("question_history", []))
         s.needs_details = bool(data.get("needs_details", False))
         if "needs_category" in data:

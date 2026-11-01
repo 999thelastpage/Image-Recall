@@ -74,6 +74,13 @@ class ExactIndex:
         q = np.asarray(query, dtype=np.float32).ravel()
         return self.embeddings[rows] @ q
 
+    def score_stats(self, query: np.ndarray) -> tuple[float, float]:
+        """Mean and std of a query's cosines over a sample of the
+        corpus, so scores from different branches can be compared."""
+        q = np.asarray(query, dtype=np.float32).ravel()
+        scores = self.embeddings[:: max(1, len(self) // 5000)] @ q
+        return float(scores.mean()), float(scores.std()) or 1.0
+
     def rank_of(self, query: np.ndarray, image_id: str) -> int | None:
         """1-based rank of an image under a query (evaluation only;
         never called from the search session path)."""

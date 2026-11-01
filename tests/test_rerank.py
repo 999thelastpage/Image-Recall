@@ -97,3 +97,18 @@ def test_rerank_failure_is_neutral_not_fatal():
     out = MuseReranker(Boom()).rerank(_cands(), paths, "a photo", top_n=3)
     assert [o.image_id for o in out] == ["img-000000", "img-000001", "img-000002"]
     assert all(o.muse is None for o in out)
+
+
+def test_rerank_client_uses_stand_in_only_when_configured(monkeypatch):
+    from backend.recall.providers import MUSE_MODEL, rerank_client
+
+    monkeypatch.setenv("META_MODEL_API_KEY", "meta-key")
+    monkeypatch.delenv("MUSE_MODEL", raising=False)
+    monkeypatch.delenv("RERANK_BASE_URL", raising=False)
+    assert rerank_client().model == MUSE_MODEL
+    monkeypatch.setenv("RERANK_BASE_URL", "https://example.test/v1/")
+    monkeypatch.setenv("RERANK_API_KEY", "other-key")
+    monkeypatch.setenv("RERANK_MODEL", "stand-in")
+    c = rerank_client()
+    assert (c.model, c.base_url, c.api_key) == (
+        "stand-in", "https://example.test/v1", "other-key")

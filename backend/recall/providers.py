@@ -16,6 +16,7 @@ import base64
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 
 BASE_URL = "https://api.meta.ai/v1"
@@ -53,17 +54,25 @@ def load_dotenv(path: str = ".env") -> None:
             os.environ.setdefault(k.strip(), v.strip())
 
 
-def _post(path: str, payload: dict, timeout: int = 120) -> dict:
+def _post(path: str, payload: dict, timeout: int = 120,
+          base_url: str = BASE_URL, api_key: str | None = None) -> dict:
     req = urllib.request.Request(
-        BASE_URL + path,
+        base_url + path,
         data=json.dumps(payload).encode(),
         headers={
-            "Authorization": f"Bearer {_api_key()}",
+            "Authorization": f"Bearer {api_key or _api_key()}",
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if attempt == 2 or (e.code != 429 and e.code < 500):
+                raise
+            time.sleep(2 ** (attempt + 1))
+    raise AssertionError("unreachable")
 
 
 class ProviderDisabled(RuntimeError):
@@ -73,13 +82,17 @@ class ProviderDisabled(RuntimeError):
 class MuseClient:
     """Muse Spark: parse / plan / explain. Disabled without a key."""
 
-    def __init__(self, model: str = MUSE_MODEL) -> None:
-        if not _api_key():
+    def __init__(self, model: str | None = None, base_url: str = BASE_URL,
+                 api_key: str | None = None) -> None:
+        self.base_url = base_url
+        self.api_key = api_key
+        if not (api_key or _api_key()):
             raise ProviderDisabled(
                 "META_MODEL_API_KEY not set; Muse provider disabled. "
                 "Add it to your local .env (see .env.example)."
             )
-        self.model = model
+        # Read here, not at import: load_dotenv runs after this module loads.
+        self.model = model or os.environ.get("MUSE_MODEL") or MUSE_MODEL
 
     def _chat(self, messages: list[dict], max_tokens: int = 2000) -> str:
         out = _post(
@@ -91,6 +104,7 @@ class MuseClient:
                 "reasoning_effort": "low",
                 "temperature": 0,  # deterministic: eval scores must not drift run to run
             },
+            base_url=self.base_url, api_key=self.api_key,
         )
         return out["choices"][0]["message"]["content"] or ""
 
@@ -116,6 +130,7 @@ class MuseClient:
                 "reasoning_effort": "low",
                 "temperature": 0,
             },
+            base_url=self.base_url, api_key=self.api_key,
         )
         return out["choices"][0]["message"]["content"] or ""
 
@@ -158,6 +173,18 @@ class MuseClient:
                 continue
             out.append(c)
         return out
+
+
+def rerank_client() -> MuseClient:
+    """Client for reranking only. RERANK_BASE_URL, RERANK_API_KEY and
+    RERANK_MODEL point it at a stand-in model for local testing; without
+    them it is Muse. Parsing, verdicts and SAM never use these."""
+    base_url = os.environ.get("RERANK_BASE_URL")
+    if not base_url:
+        return MuseClient()
+    return MuseClient(os.environ.get("RERANK_MODEL") or None,
+                      base_url=base_url.rstrip("/"),
+                      api_key=os.environ.get("RERANK_API_KEY"))
 
 
 class SamClient:
