@@ -122,6 +122,7 @@ class SearchSession:
     subject_checked: bool = False
     dimension_checked: bool = False
     doubted_dimension: int | None = None
+    dimension_pending: bool = False
     question_history: list[str] = field(default_factory=list)
     needs_details: bool = False
     needs_category: bool = False
@@ -237,6 +238,20 @@ class SearchSession:
         if n > MAX_QUESTIONS:
             return None
         asked_kinds = [a.kind for a in self.answers]
+        # a doubted bundled dimension gets its attribute first: the
+        # modifier error is the common case and its fix is cheap
+        if self.doubted_dimension is not None and not any(
+            a.kind == "attribute" and a.clue_index == self.doubted_dimension
+            for a in self.answers
+        ):
+            i = self.doubted_dimension
+            return attribute_template(self.clues[i], i, n)
+        # subject doubt on a bundled clue: settle its dimension
+        # before asking for a replacement noun
+        if self.dimension_pending and not self.dimension_checked:
+            anchor0 = self._anchor_index()
+            if anchor0 is not None:
+                return dimension_question(self.clues[anchor0], anchor0, n)
         if self.doubted_anchor is not None and not any(
             a.kind == "attribute" and a.clue_index == self.doubted_anchor
             for a in self.answers
@@ -251,13 +266,6 @@ class SearchSession:
         anchor = self._anchor_index()
         if anchor is not None and not self.subject_checked:
             return subject_question(self.clues[anchor], anchor, n)
-        # a doubted bundled dimension gets its attribute next
-        if self.doubted_dimension is not None and not any(
-            a.kind == "attribute" and a.clue_index == self.doubted_dimension
-            for a in self.answers
-        ):
-            i = self.doubted_dimension
-            return attribute_template(self.clues[i], i, n)
         # bundled colour/count dimension, asked on its own so the
         # user can doubt the modifier without doubting the noun
         if anchor is not None and self.subject_checked \
@@ -308,6 +316,8 @@ class SearchSession:
             elif value == SOMETHING_ELSE:
                 if anchor_idx is not None:
                     self.doubted_anchor = anchor_idx
+                    if self.clues[anchor_idx].kind in ("colour", "count"):
+                        self.dimension_pending = True
             elif value == NOT_SURE:
                 self.needs_category = True
                 if anchor_idx is not None:
@@ -318,6 +328,7 @@ class SearchSession:
                         self.needs_details = True
         elif q.kind == "dimension":
             self.dimension_checked = True
+            self.dimension_pending = False
             self.subject_checked = True
             dim_idx = q.clue_index if q.clue_index is not None \
                 else self._anchor_index()
@@ -524,6 +535,7 @@ class SearchSession:
             "subject_checked": self.subject_checked,
             "dimension_checked": self.dimension_checked,
             "doubted_dimension": self.doubted_dimension,
+            "dimension_pending": self.dimension_pending,
             "question_history": list(self.question_history),
             "needs_details": self.needs_details,
             "needs_category": self.needs_category,
@@ -560,6 +572,7 @@ class SearchSession:
             "dimension_checked",
             any(a.kind == "dimension" for a in s.answers)))
         s.doubted_dimension = data.get("doubted_dimension")
+        s.dimension_pending = bool(data.get("dimension_pending", False))
         s.question_history = list(data.get("question_history", []))
         s.needs_details = bool(data.get("needs_details", False))
         if "needs_category" in data:

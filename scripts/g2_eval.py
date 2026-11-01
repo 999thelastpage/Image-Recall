@@ -91,12 +91,20 @@ def simulate(session, case: dict) -> None:
                 value = YES_SURE
         elif q.kind in ("category", "details"):
             value = NOT_SURE
+        elif q.kind == "dimension":
+            if case["wrong"] and q.clue_index is not None \
+                    and 0 <= q.clue_index < len(session.clues) \
+                    and case["wrong"] in session.clues[q.clue_index].text.lower():
+                value = SOMETHING_ELSE
+            else:
+                value = YES_SURE
         elif q.kind == "uncertainty" and case["wrong"]:
             value = next((o for o in q.options
                           if case["wrong"] in o.lower()), NOT_SURE)
         elif q.kind == "attribute" and q.clue_index is not None and case["wrong"]:
             clue = session.clues[q.clue_index]
-            if case["wrong"] in clue.text.lower() and case["true"]:
+            if case["wrong"] in clue.text.lower() and case["true"] \
+                    and case["true"] in q.options:
                 value = case["true"]
         session.answer(value)
 
