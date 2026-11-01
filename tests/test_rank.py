@@ -102,3 +102,14 @@ def test_providers_disabled_without_key(monkeypatch):
         raise AssertionError("expected ProviderDisabled")
     except ProviderDisabled:
         pass
+
+
+def test_muse_model_comes_from_env(monkeypatch):
+    from backend.recall.providers import MUSE_MODEL, MuseClient
+
+    monkeypatch.setenv("META_MODEL_API_KEY", "test-key")
+    monkeypatch.delenv("MUSE_MODEL", raising=False)
+    assert MuseClient().model == MUSE_MODEL
+    monkeypatch.setenv("MUSE_MODEL", "muse-spark-1.3-contributor")
+    assert MuseClient().model == "muse-spark-1.3-contributor"
+    assert MuseClient("explicit").model == "explicit"

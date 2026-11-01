@@ -27,13 +27,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.recall.clues import Clue, dedupe_clues, hypotheses, parse_fallback
+from backend.recall.clues import Clue, dedupe_clues, parse_fallback, recall_hypotheses
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
-from backend.recall.providers import MuseClient, load_dotenv
+from backend.recall.providers import MuseClient, load_dotenv, rerank_client
 from backend.recall.config import ENCODER_MODEL, FINAL_TOP_K, branch_quota
 from backend.recall.questions import COLOURS
-from backend.recall.rank import branch_union
+from backend.recall.rank import calibrated_union
 from backend.recall.retrieve import ExactIndex
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -360,13 +360,14 @@ def search(req: SearchRequest) -> dict:
                                   for c in chips])
         timings["parse_ms"] = round((time.time() - t0) * 1000, 1)
         out["parse_cached"] = cached
-        hyps = hypotheses(clues, substitution_colours=tuple(COLOURS),
-                          max_substitutions=2)
+        hyps = recall_hypotheses(req.query, clues,
+                                 substitution_colours=tuple(COLOURS),
+                                 max_substitutions=2)
         t0 = time.time()
         # Batched encode + batched union: one matmul for all branches.
         mat = enc.encode_texts([h.query_text for h in hyps]) if hyps else []
         queries = list(zip(hyps, mat, strict=True))
-        union = branch_union(index, queries, per_branch_k=branch_quota(len(index)))
+        union, _weights = calibrated_union(index, queries, branch_quota(len(index)))
         timings["recall_search_ms"] = round((time.time() - t0) * 1000, 1)
         out["clues"] = [c.text for c in clues]
         out["parse_source"] = parse_source
@@ -525,8 +526,12 @@ def finish_session(session_id: str) -> dict:
         from backend.recall.rerank import MuseReranker
 
         paths = {i: e.path for i, e in entries.items()}
-        ranked = MuseReranker(MuseClient(), max_workers=8).rerank(
+        client = rerank_client()
+        ranked = MuseReranker(client, max_workers=8).rerank(
             s.candidates, paths, _doubt_aware(s))
+        if all(r.muse is None for r in ranked):
+            raise RuntimeError("no image could be scored")
+        out["rerank_model"] = client.model
         out["results"] = [
             {"image_id": r.image_id, "score": round(r.final, 4),
              "muse_score": (None if r.muse is None else round(r.muse, 2)),
@@ -552,8 +557,10 @@ def rerank_session(session_id: str) -> dict:
     try:
         from backend.recall.rerank import MuseReranker
 
-        out = MuseReranker(MuseClient()).rerank(
+        out = MuseReranker(rerank_client()).rerank(
             s.candidates, paths, _doubt_aware(s))
+        if all(r.muse is None for r in out):
+            raise RuntimeError("no image could be scored")
     except Exception as e:  # noqa: BLE001
         raise HTTPException(503, f"rerank unavailable: {type(e).__name__}") from e
     return {

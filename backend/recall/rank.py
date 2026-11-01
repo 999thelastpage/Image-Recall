@@ -12,9 +12,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .clues import Hypothesis
+from .clues import RAW_LABEL, Hypothesis
 from .config import BRANCH_TOP_K, RRF_K
 from .retrieve import ExactIndex
+
+
+BRANCH_LEAD = 0.9  # clue branches against the user's own sentence
 
 
 @dataclass
@@ -61,6 +64,29 @@ def branch_union(
     # let correlated relax branches outvote one exact branch.
     return sorted(merged.values(),
                   key=lambda c: (-(c.score + 0.15 * c.fused), -c.score, c.image_id))
+
+
+def calibrated_union(
+    index: ExactIndex,
+    branch_queries: list[tuple[Hypothesis, np.ndarray]],
+    per_branch_k: int,
+) -> tuple[list[Candidate], dict[str, float]]:
+    """Union whose scores are comparable across branches.
+
+    Raw cosines are not: a short query like 'bus' scores differently
+    from a full sentence. Each branch is z-normalised over the corpus,
+    and every branch but the user's own sentence counts for BRANCH_LEAD
+    until the user doubts something. Returns candidates and weights."""
+    union = branch_union(index, branch_queries, per_branch_k)
+    stats = {h.label: index.score_stats(q) for h, q in branch_queries}
+    weights = {h.label: BRANCH_LEAD for h, _q in branch_queries
+               if h.label != RAW_LABEL}
+    for c in union:
+        c.branch_scores = {b: (s - stats[b][0]) / stats[b][1]
+                           for b, s in c.branch_scores.items()}
+        c.score = max(weights.get(b, 1.0) * s for b, s in c.branch_scores.items())
+    union.sort(key=lambda c: (-c.score, c.image_id))
+    return union, weights
 
 
 def weighted_rerank(

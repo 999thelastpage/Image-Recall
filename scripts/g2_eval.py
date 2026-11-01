@@ -98,7 +98,9 @@ def simulate(session, case: dict, target: str | None = None,
         elif q.kind in ("category", "details"):
             value = NOT_SURE
         elif q.kind == "dimension":
-            if case["wrong"] and q.clue_index is not None \
+            # A truthful user blames the colour only when it is wrong:
+            # with a wrong noun in 'purple car', the colour is fine.
+            if case["kind"] == "colour" and q.clue_index is not None \
                     and 0 <= q.clue_index < len(session.clues) \
                     and case["wrong"] in session.clues[q.clue_index].text.lower():
                 value = SOMETHING_ELSE
@@ -125,6 +127,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-kind", type=int, default=10,
                     help="wrong-colour and wrong-object cases each")
+    ap.add_argument("--offline-parse", action="store_true",
+                    help="use the lexicon parser even when a Muse key is set")
+    ap.add_argument("--limit", type=int, default=0,
+                    help="run only the first N cases (cost check)")
     ap.add_argument("--rerank", action="store_true",
                     help="apply the product's doubt-aware top-40 rerank")
     args = ap.parse_args()
@@ -132,7 +138,12 @@ def main() -> int:
     from backend.recall.clues import Clue
     from backend.recall.embeddings import MetaClipEncoder
     from backend.recall.manifest import read_manifest
-    from backend.recall.providers import MuseClient, load_dotenv
+    from backend.recall.providers import (
+        MuseClient,
+        ProviderDisabled,
+        load_dotenv,
+        rerank_client,
+    )
     from backend.recall.retrieve import ExactIndex
     from backend.recall.session import SearchSession
 
@@ -143,21 +154,39 @@ def main() -> int:
     caps = json.loads(Path("data/coco/captions.json").read_text())
     by_file = {Path(e.path).name: e.image_id for e in entries}
     cases = pick_cases(caps, by_file, per_kind=args.per_kind)
+    if args.limit:
+        cases = cases[:: max(1, len(cases) // args.limit)][:args.limit]
     print(f"{len(cases)} cases "
           f"({sum(c['kind'] == 'colour' for c in cases)} colour, "
           f"{sum(c['kind'] == 'object' for c in cases)} object, "
           f"{sum(c['kind'] == 'accurate' for c in cases)} accurate)")
 
     enc = MetaClipEncoder()
-    muse = MuseClient()
+    try:
+        muse = MuseClient()
+    except ProviderDisabled:
+        muse = None
+    if args.offline_parse:
+        muse = None
+    reranker = None
+    if args.rerank:
+        reranker = rerank_client()
+    print("parse:", muse.model if muse else "OFFLINE fallback (no Muse calls)")
+    print("rerank:", reranker.model if reranker else "off", flush=True)
+    calls = failed = 0
     rows = []
     for i, case in enumerate(cases, 1):
         target = by_file[case["file"]]
         base_rank = index.rank_of(enc.encode_texts([case["query"]]), target)
         base_hit = base_rank is not None and base_rank <= 5
-        chips = muse.parse(case["query"])
-        clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
-                 for c in chips if len(c["text"].strip()) > 1]
+        if muse is None:
+            from backend.recall.clues import dedupe_clues, parse_fallback
+
+            clues = dedupe_clues(parse_fallback(case["query"]))
+        else:
+            chips = muse.parse(case["query"])
+            clues = [Clue(c["text"], c.get("kind", "other"), c.get("referent", ""))
+                     for c in chips if len(c["text"].strip()) > 1]
         s = SearchSession(index, enc, case["query"], clues)
         s.start()
         union_rank = _rank(s, target)
@@ -170,7 +199,7 @@ def main() -> int:
         # final rank within full candidate list, not just top-5 print
         full_rank = next((r for r, c in enumerate(s.candidates, 1)
                           if c.image_id == target), None)
-        if args.rerank:
+        if reranker is not None:
             from backend.recall.questions import NOT_SURE
             from backend.recall.rerank import MuseReranker, doubt_aware_description
 
@@ -183,9 +212,12 @@ def main() -> int:
             paths = {e.image_id: e.path for e in entries}
             from backend.recall.rerank import RERANK_TOP_N, RERANK_WEIGHT
 
-            ranked = MuseReranker(muse, max_workers=8).rerank(
+            ranked = MuseReranker(reranker, max_workers=8).rerank(
                 s.candidates, paths, desc,
                 top_n=RERANK_TOP_N, weight=RERANK_WEIGHT)
+            head = ranked[:RERANK_TOP_N]
+            calls += len(head)
+            failed += sum(x.muse is None for x in ranked if x.final != -1.0)
             full_rank = next((r for r, x in enumerate(ranked, 1)
                               if x.image_id == target), None)
         recall_hit = full_rank is not None and full_rank <= 5
@@ -205,10 +237,15 @@ def main() -> int:
         sub = [r for r in rows if r["kind"] == kind]
         b = sum(r["base_hit"] for r in sub)
         r_ = sum(r["recall_hit"] for r in sub)
-        print(f"{label}: baseline Hit@5 {b}/{len(sub)} -> Recall {r_}/{len(sub)}")
+        b10 = sum((r["base_rank"] or 9999) <= 10 for r in sub)
+        r10 = sum((r["final_rank"] or 9999) <= 10 for r in sub)
+        print(f"{label}: baseline Hit@5 {b}/{len(sub)} -> Recall {r_}/{len(sub)} "
+              f"| Hit@10 {b10} -> {r10}")
     from collections import Counter
 
     print("failure layers:", dict(Counter(r["layer"] for r in rows)))
+    if reranker is not None:
+        print(f"rerank calls {calls}, failed scores {failed}")
     for r in rows:
         if r["layer"] == "ranking-demotion":
             src = "rerank" if (r["pre_rerank_rank"] or 999) <= 5 else "answers"

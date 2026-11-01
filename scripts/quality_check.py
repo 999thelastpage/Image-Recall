@@ -23,7 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="train2014")
-    ap.add_argument("--captions", default="data/coco/captions_train2014.json")
+    ap.add_argument("--captions", default=None,
+                    help="default: captions.json for coco_val2017, "
+                    "captions_train2014.json for train2014")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--model", default=None,
                     help="HF model id; embeddings cached per model under embeddings/")
@@ -32,7 +34,7 @@ def main() -> int:
     import numpy as np
 
     from backend.recall.config import ENCODER_MODEL
-    from backend.recall.embeddings import MetaClipEncoder
+    from backend.recall.embeddings import build_encoder
     from backend.recall.manifest import read_manifest
     from backend.recall.retrieve import ExactIndex
 
@@ -41,7 +43,7 @@ def main() -> int:
     slug = model.replace("/", "_")
     cache = Path(f"embeddings/{args.corpus}__{slug}.npy")
     default_cache = Path(f"embeddings/{args.corpus}.npy")
-    enc = MetaClipEncoder(model)
+    enc = build_encoder(model)
     if cache.exists():
         mat = np.load(cache)
     elif args.model is None and default_cache.exists():
@@ -71,7 +73,10 @@ def main() -> int:
         print(f"embedded {len(entries)} with {model} in {dt:.0f}s "
               f"({len(entries) / max(dt, 1):.1f} img/s) -> {cache}")
     print(f"model={model} dim={mat.shape[1]}")
-    caps = json.loads(Path(args.captions).read_text())
+    captions = args.captions or (
+        "data/coco/captions.json" if "val2017" in args.corpus
+        else "data/coco/captions_train2014.json")
+    caps = json.loads(Path(captions).read_text())
     by_file = {Path(e.path).name: e.image_id for e in entries}
     usable = [(f, by_file[f]) for f in sorted(caps) if f in by_file]
     step = max(1, len(usable) // args.n)

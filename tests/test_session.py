@@ -60,9 +60,10 @@ def test_subject_question_is_first_and_names_anchor():
 
 def test_confirming_subject_changes_no_weights_or_dropped():
     s = _session()
+    weights = dict(s.weights)
     s.answer(YES_SURE)
     assert s.dropped == set()
-    assert s.weights == {}
+    assert s.weights == weights
     assert s.subject_checked is True
     assert s.pending is not None and s.pending.kind == "uncertainty"
 
@@ -115,9 +116,10 @@ def test_doubted_anchor_is_replaced_not_dropped():
     # 'It was something else' on the subject question: doubting the
     # anchor must not drop it or re-weight anything; next Q asks
     # replacement.
+    weights = dict(s.weights)
     s.answer(SOMETHING_ELSE)
     assert s.dropped == set()
-    assert s.weights == {}
+    assert s.weights == weights
     assert s.doubted_anchor == 0
     assert s.pending is not None and s.pending.kind == "attribute"
     assert s.pending.clue_index == 0
@@ -157,9 +159,10 @@ def test_not_sure_is_neutral():
     s = _session()
     s.answer(YES_SURE)
     top_before = s.candidates[0].image_id
+    weights = dict(s.weights)
     s.answer(NOT_SURE)
     assert s.dropped == set()
-    assert s.weights == {}
+    assert s.weights == weights
     assert s.candidates[0].image_id == top_before
 
 
@@ -655,3 +658,58 @@ def test_colour_fix_after_subject_doubt_keeps_noun_and_drops_wrong_colour():
     assert s.answers[-1].value == "blue"
     # the noun was never doubted once the colour took the blame
     assert s.pending is None or s.pending.kind != "attribute"
+
+
+def test_users_own_sentence_is_searched_and_leads():
+    enc = _RecordingEncoder()
+    s = _purple_session(enc)
+    assert "a purple car parked in grass" in enc.seen
+    raw_top = s.candidates[0]
+    assert "raw" in raw_top.branches
+    assert "raw" not in s.weights
+    assert all(w < 1.0 for w in s.weights.values())
+
+
+def test_colour_correction_edits_the_whole_sentence():
+    enc = _RecordingEncoder()
+    s = _purple_session(enc)
+    s.answer(YES_SURE)
+    s.answer(SOMETHING_ELSE)
+    before = len(enc.seen)
+    s.answer("blue")
+    assert enc.seen[before:] == ["a blue car parked in grass"]
+
+
+def test_noun_correction_edits_the_whole_sentence():
+    enc = _RecordingEncoder()
+    s = _purple_session(enc)
+    s.answer(SOMETHING_ELSE)
+    s.answer(YES_SURE)  # the colour is right, the noun is the doubt
+    assert s.pending is not None and s.pending.kind == "attribute"
+    before = len(enc.seen)
+    s.answer(s.pending.options[0])
+    new = enc.seen[before:]
+    assert len(new) == 1
+    assert new[0].startswith("a purple ") and new[0].endswith(" parked in grass"), new
+    assert not re.search(r"\bcar\b", new[0]), new
+
+
+def test_doubted_clue_is_removed_from_the_sentence_not_rebuilt():
+    enc = _RecordingEncoder()
+    s = _purple_session(enc)
+    s.answer(YES_SURE)
+    s.answer(YES_SURE)
+    assert s.pending is not None and s.pending.kind == "uncertainty"
+    before = len(enc.seen)
+    s.answer("in grass")
+    assert enc.seen[before:] == ["a purple car parked"]
+
+
+def test_corrections_accumulate_and_survive_reload():
+    s = _purple_session()
+    s.answer(YES_SURE)
+    s.answer(SOMETHING_ELSE)
+    s.answer("blue")
+    assert s.sentence == "a blue car parked in grass"
+    again = SearchSession.from_dict(s.index, s.encoder, s.to_dict())
+    assert again.sentence == s.sentence
