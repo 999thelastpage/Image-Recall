@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from .rank import Candidate
 
 RERANK_WEIGHT = 0.65
-RERANK_TOP_N = 80
+RERANK_TOP_N = 40
 GUARD_TOP = 5    # union candidates protected from deep demotion
 GUARD_FLOOR = 10  # they cannot fall below this rank on a weak Muse score
 GUARD_MIN_MUSE = 0.1  # at or below this, Muse may demote freely
