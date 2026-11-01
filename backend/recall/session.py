@@ -214,11 +214,12 @@ class SearchSession:
                if c.referent.strip() and j != exclude_index
                and c.kind in ("object", "person", "colour", "count")]
         if exclude_index is not None:
-            banned = self.clues[exclude_index].referent.strip().lower()
-            own = [o for o in own if o.lower() != banned]
+            clue = self.clues[exclude_index]
+            banned = {clue.referent.strip().lower(), clue.text.strip().lower()}
+            own = [o for o in own if o.lower() not in banned]
             fixed = ["dog", "cat", "car", "bus", "bicycle", "boat",
                      "train", "bird", "horse"]
-            fixed = [o for o in fixed if o.lower() != banned]
+            fixed = [o for o in fixed if o.lower() not in banned]
         else:
             fixed = ["dog", "cat", "car", "bus", "bicycle", "boat",
                      "train", "bird", "horse"]

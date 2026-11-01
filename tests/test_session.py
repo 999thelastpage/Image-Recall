@@ -747,3 +747,14 @@ def test_doubted_clue_stays_removed_when_the_value_is_not_known():
     s.answer("orange raft")
     s.answer(NOT_SURE)
     assert 1 in s.dropped
+
+
+def test_replacement_options_do_not_offer_the_doubted_word():
+    enc = StubEncoder()
+    index = ExactIndex(["img-000000"], enc.encode_texts(["bus in grass"]))
+    clues = [Clue("car", "object", ""), Clue("parked car", "activity", "car")]
+    s = SearchSession(index, enc, "a car parked", clues)
+    s.start()
+    s.answer(SOMETHING_ELSE)
+    assert "car" not in s.pending.options
+    assert "bus" in s.pending.options
