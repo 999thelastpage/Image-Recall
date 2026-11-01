@@ -335,6 +335,10 @@ class SearchSession:
             if value == SOMETHING_ELSE:
                 if dim_idx is not None:
                     self.doubted_dimension = dim_idx
+                    # The modifier takes the blame, so the noun is no
+                    # longer doubted: the answer must not replace it.
+                    if self.doubted_anchor == dim_idx:
+                        self.doubted_anchor = None
             elif value == NOT_SURE:
                 if dim_idx is not None:
                     # doubt only the modifier: boost its relax branch
