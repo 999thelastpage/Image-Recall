@@ -60,6 +60,13 @@
   .test p{margin:4px 0;max-width:none}
   .test .see{color:var(--good)}
   code{background:#f1efe9;border-radius:5px;padding:1px 6px;font-size:13.5px}
+  .tablewrap{overflow-x:auto;max-width:820px;margin:12px 0}
+  table{border-collapse:collapse;background:#fff;width:100%;font-size:15px;font-variant-numeric:tabular-nums}
+  caption{text-align:left;color:var(--soft);font-size:14px;padding:0 0 6px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:#f1efe9;font-weight:700}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  td:first-child{min-width:170px}
   /* stat tiles */
   .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-width:720px;margin:12px 0 14px}
   .stat{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
@@ -79,6 +86,7 @@
     <div class="logo">Recall<span>.</span></div>
     <span style="color:var(--soft);font-size:14px">how it works, in simple words</span>
     <div class="spacer"></div>
+    <a href="/guide.html" style="font-weight:600">Guide</a>
     <a href="/" style="font-weight:600">← Back to search</a>
   </div>
 </header>
@@ -104,15 +112,15 @@
     <div class="arrow">→</div>
     <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 2: Muse cuts the text into facts" data-d="Muse Spark is a language model from Meta. It cuts your text into small facts: the thing, its colour, the count, the place, the action. Each fact can be wrong alone."><span class="n">2</span><b>Muse cuts facts</b><small>thing, colour, count, place</small></div>
     <div class="arrow">→</div>
-    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 3: Recall makes many searches" data-d="Recall makes one search with all facts. Then Recall makes one search for each removed fact. If 'red' is wrong, the search without 'red' can find the bus."><span class="n">3</span><b>Many searches</b><small>one per removed fact</small></div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 3: Recall makes many searches" data-d="Recall searches your full sentence. Then Recall makes one search for each removed fact. If 'red' is wrong, the search without 'red' can find the bus."><span class="n">3</span><b>Many searches</b><small>one per removed fact</small></div>
     <div class="arrow">→</div>
     <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 4: MetaCLIP finds photos" data-d="MetaCLIP is a model from Meta. It turns photos and words into numbers. Words and photos with near numbers are a good match. It searches all photos very fast: about 0.07 seconds for 82,783 photos."><span class="n">4</span><b>MetaCLIP finds</b><small>words vs photos, by numbers</small></div>
     <div class="arrow">→</div>
-    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 5: Recall joins the results" data-d="Each search has its own best photos. Recall joins them into one list. No photo is deleted. A photo found by many searches gets a strong place."><span class="n">5</span><b>Recall joins</b><small>one list, nothing deleted</small></div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 5: Recall joins the results" data-d="Each search has its own best photos. Recall puts all scores on one scale and joins them into one list. Your full sentence has the most weight. No photo is deleted."><span class="n">5</span><b>Recall joins</b><small>one list, nothing deleted</small></div>
     <div class="arrow">→</div>
-    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 6: Recall asks you" data-d="Recall asks a maximum of 3 questions. Example: 'Which detail can be wrong?' Your answer gives more weight to the searches without that detail. 'Not sure' is a good answer too. It changes nothing."><span class="n">6</span><b>Max 3 questions</b><small>your answers fix the order</small></div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 6: Recall asks you" data-d="Recall asks a maximum of 3 questions. Example: 'Which detail can be wrong?' If you give a new value, Recall changes your sentence and searches again. If you doubt a detail, Recall removes it from the search. 'Not sure' is a good answer too."><span class="n">6</span><b>Max 3 questions</b><small>your answers fix the order</small></div>
     <div class="arrow">→</div>
-    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 7: SAM checks the top photos" data-d="SAM 3.1 is a vision model from Meta. It finds the thing in the photo and draws a box around it. Recall counts the boxes. Recall reads the colour in the box. Muse looks at the photo and checks place and action facts."><span class="n">7</span><b>SAM checks</b><small>boxes, count, colour</small></div>
+    <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 7: AI checks the top photos" data-d="Muse Spark looks at each top photo. It tells you if the thing is there, how many there are and the colour. It also checks place and action facts. When SAM 3.1 is on, SAM finds the thing and draws a box, and Recall reads the colour in the box."><span class="n">7</span><b>AI checks</b><small>thing, count, colour</small></div>
     <div class="arrow">→</div>
     <div class="step hv" tabindex="0" data-panel="panelMain" data-t="Step 8: You see photo and proof" data-d="You see the best photos first. You also see simple proof lines: 'Found 3 buses. You said 3. Colour is brown. You said red.' You can trust the result, because you can check it."><span class="n">8</span><b>Photo + proof</b><small>you can check every word</small></div>
   </div>
@@ -128,7 +136,7 @@
     <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove B" data-d="This search works when the colour is wrong. Example: you remember red, but the bus is brown. This is the most common memory error."><span class="tag">REMOVE B</span><span class="facts"><span class="fact">A thing</span><span class="fact off">B colour</span><span class="fact">C count</span><span class="fact">D place</span></span></div>
     <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove C" data-d="This search works when the count is wrong. Example: you remember three buses, but there are two."><span class="tag">REMOVE C</span><span class="facts"><span class="fact">A thing</span><span class="fact">B colour</span><span class="fact off">C count</span><span class="fact">D place</span></span></div>
     <div class="branchrow hv" tabindex="0" data-panel="panelBranch" data-t="Remove D" data-d="This search works when the place is wrong. Example: you remember a city street, but it is a bus station."><span class="tag">REMOVE D</span><span class="facts"><span class="fact">A thing</span><span class="fact">B colour</span><span class="fact">C count</span><span class="fact off">D place</span></span></div>
-    <p style="color:var(--soft);font-size:14px;margin-bottom:0">Then Recall joins all the branch lists: the full search, one search per dropped clue, relaxed searches that keep the noun, and a few colour swaps. Your answers give more weight to the right lists. No list can delete a photo.</p>
+    <p style="color:var(--soft);font-size:14px;margin-bottom:0">Then Recall joins all the lists: your full sentence, one search per dropped clue, relaxed searches that keep the noun, and a few colour swaps. A correction changes your sentence and starts a new search with the most weight. No list can delete a photo.</p>
   </div>
   <div class="hvpanel" id="panelBranch"><b>Move over a row.</b><p>Each row is one search.</p></div>
 
@@ -136,7 +144,7 @@
   <p>Move over a part. The name is on the left. The job is on the right.</p>
   <div class="part hv" tabindex="0" data-panel="panelParts" data-t="Muse Spark: the brain for words" data-d="Muse Spark reads your text. It cuts the text into facts. It also reads the top photos at the end and gives a second opinion on the order. It is a Meta model. It works only with an API key. With no key, Recall uses a simple offline method."><b>Muse Spark</b><span>Reads your words. Cuts them into facts. Gives a second opinion on the best photos.</span></div>
   <div class="part hv" tabindex="0" data-panel="panelParts" data-t="MetaCLIP: the eyes for search" data-d="MetaCLIP turns each photo into 768 numbers, one time. It turns your words into numbers too. Near numbers mean a good match. This part works on your computer. Your photos do not go to the internet for this step."><b>MetaCLIP-L14</b><span>Turns photos and words into numbers. Finds the near matches. Very fast.</span></div>
-  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="SAM 3.1: the checker" data-d="SAM finds the thing in a photo and draws boxes. One box for each thing it finds. Recall counts the boxes. Recall reads the colour inside the first box. This makes the proof you can see and check."><b>SAM 3.1</b><span>Finds things in photos. Draws boxes. This gives count and colour proof.</span></div>
+  <div class="part hv" tabindex="0" data-panel="panelParts" data-t="SAM 3.1: the checker" data-d="When SAM is on, it finds the thing in a photo and draws boxes. One box for each thing it finds. Recall counts the boxes. Recall reads the colour inside the first box. This makes the proof you can see and check."><b>SAM 3.1</b><span>Finds things in photos. Draws boxes. This gives count and colour proof.</span></div>
   <div class="part hv" tabindex="0" data-panel="panelParts" data-t="The questions: the repair" data-d="Recall asks a maximum of 3 questions. It first checks the main subject, then a bundled colour or count on its own, then the detail you are least sure about. Each answer changes the weight of the searches. Answers never delete photos."><b>3 questions</b><span>Check the subject, then the shaky detail. Fix the order with your answers.</span></div>
   <div class="part hv" tabindex="0" data-panel="panelParts" data-t="The proof card: trust you can check" data-d="For the top 3 photos, Recall writes simple lines: what it found, how many, what colour, and if the place and action are right. If a line is not sure, it says 'can't tell either way'. Recall does not invent proof."><b>Proof card</b><span>Simple lines for the top 3 photos: found, count, colour, place. Nothing invented.</span></div>
   <div class="part hv" tabindex="0" data-panel="panelParts" data-t="Your photos: private by design" data-d="On your computer, you can add a folder. Recall makes small preview copies and a numbers file for each photo: about 3 KB of numbers plus a small preview of about 23 KB per photo. The big originals stay in place. In the public demo, this part is off."><b>Your folder</b><span>Add your own photos on your computer. Small copies only. Originals stay in place.</span></div>
@@ -180,7 +188,7 @@
     <p class="see">You see: simple proof lines for 3 photos: what Recall found, how many, and the facts it checked. This is the text you can show to another person.</p></div>
 
   <div class="test"><b class="t">Test 4: The AI double-check</b>
-    <p>Do: finish Test 2 or Test 3. Tap <b>Double-check top 10 with AI</b>. Wait about 15 seconds.</p>
+    <p>Do: finish Test 2 or Test 3. Tap <b>Double-check top 10 with AI</b>. Wait about 30 seconds.</p>
     <p class="see">You see: Muse reads the top photos and makes a new order. Each photo shows its AI score out of 10.</p></div>
 
   <div class="test"><b class="t">Test 5: The secret target game (test like a judge)</b>
@@ -192,21 +200,35 @@
     <p class="see">You see: a new library in the list at the top. Search works on your photos. Only small previews of about 23 KB and 3 KB of numbers per photo stay on disk. Your big originals do not move. This test is off in the public demo.</p></div>
 
   <h2>7. Numbers we measured</h2>
-  <p>These numbers come from real tests that we ran on this computer.</p>
+  <p>These numbers come from tests that we ran on this computer.</p>
   <div class="card">
-    <h3 style="margin-top:0">Wrong detail test: Recall finds the photo in 72% of cases</h3>
+    <h3 style="margin-top:0">Wrong detail test: correct one detail, and Recall finds the photo in 80% of cases</h3>
     <div class="stats">
-      <div class="stat win"><span class="label">Recall</span><span class="value">72%</span><span class="sub">43 of 60 cases</span></div>
-      <div class="stat"><span class="label">Simple search</span><span class="value">60%</span><span class="sub">36 of 60 cases</span></div>
-      <div class="stat"><span class="label">Gain with Recall</span><span class="value">+7</span><span class="sub">more photos in the top 5</span></div>
+      <div class="stat win"><span class="label">Correct photo in the top 5</span><span class="value">80%</span><span class="sub">Simple search: 63%</span></div>
+      <div class="stat"><span class="label">Photos gained against the same AI check</span><span class="value">+10</span><span class="sub">0 photos lost, top 5</span></div>
+      <div class="stat"><span class="label">Lost photos returned to the top 5</span><span class="value">3.5×</span><span class="sub">7 photos against 2</span></div>
     </div>
-    <p>Each case has one wrong detail, and the right photo is 1 of 5,000 photos.
-    To pass, Recall must put that photo in its top 5, which is the top 0.1% of
-    the library. Recall needs a maximum of 3 questions. A test program gives
-    true answers to the questions.</p>
-    <p><b>Wrong thing</b> (you remember a bus, but it is a truck): simple search
-    finds 17 of 30, and Recall finds 22 of 30. <b>Wrong colour:</b> simple search
-    finds 19 of 30, and Recall finds 21 of 30.</p>
+    <p>Each search starts with one wrong colour or one wrong object. The right photo
+    is 1 of 5,000 photos. The user then corrects the detail in Recall.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Number of searches with the correct photo in the list. 60 searches, 5,000 photos.</caption>
+        <thead><tr><th>Test</th><th class="n">Simple search</th><th class="n">Simple search + AI check</th><th class="n">Recall + AI check + correction</th></tr></thead>
+        <tbody>
+          <tr><td>All searches, top 5</td><td class="n">38</td><td class="n">38</td><td class="n"><b>48</b></td></tr>
+          <tr><td>All searches, top 10</td><td class="n">40</td><td class="n">47</td><td class="n"><b>52</b></td></tr>
+          <tr><td>Wrong colour, top 5 (30 searches)</td><td class="n">19</td><td class="n">17</td><td class="n"><b>21</b></td></tr>
+          <tr><td>Wrong object, top 5 (30 searches)</td><td class="n">19</td><td class="n">21</td><td class="n"><b>27</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The “lost photos” result is for 10 searches. In these searches, the wrong detail
+    pushed the photo out of the top 5 of simple search.</p>
+    <p><b>How we made this test:</b> a computer program made each wrong description and
+    gave each correction. The program knows the correct detail. The objects are on the
+    Recall answer list. The AI check is Muse Spark. It gives both searches the same check. “New searches” are searches that we did not use to tune Recall.</p>
+    <p><b>One example:</b> a user types “a car parked in grass”, and the photo shows a bus.
+    Simple search puts the photo at position 14. One correction in Recall moves it to position 3.</p>
     <p><b>Speed:</b> one search over 82,783 photos takes about 0.07 seconds. All Recall searches together take under 0.1 seconds. The Muse word step takes some seconds, and Recall keeps its answer: the same question a second time takes about 0.06 seconds in total.</p>
     <p style="margin-bottom:0"><b>Photo sets:</b> 5,000 photos in the public demo. 82,783 photos in the big test set on this computer. Same engine, same numbers format (768 numbers per photo).</p>
   </div>
@@ -233,8 +255,9 @@
 
   <h2>9. Where Recall is strong, and how it grows</h2>
   <p><b>Proven today, ready to grow:</b> we built this prototype for one wrong
-  detail, and our tests show that it works: Recall finds more photos than simple
-  search (43 of 60 against 36 of 60). The next step is more engineering, so that
+  detail, and our tests show that it works: when the user corrects the detail, the
+  correct photo is in the top 5 in 48 of 60 searches, against 38 of 60 for simple
+  search. The next step is more engineering, so that
   Recall can also repair a memory with two or more wrong details.</p>
   <p><b>Better models, better results:</b> Recall is built so that its models
   can change. We expect better vision and reranking models to improve results
@@ -245,12 +268,12 @@
   about 0.07 seconds, and all Recall searches together take under 0.1 seconds.
   It checks every photo, so no photo is skipped. This speed leaves room for
   more questions and deeper AI checks, and for larger libraries.</p>
-  <p><b>Proof you can check:</b> the colour check reads the colour inside the
-  SAM box, and strong shadows or coloured light can change the reading. So
+  <p><b>Proof you can check:</b> the colour check reads the colour of the
+  thing in the photo, and strong shadows or coloured light can change the reading. So
   Recall shows you each reading next to what you said. When a check is not sure,
   the proof line says “can't tell either way”. Recall does not guess for you.</p>
 </main>
-<footer>Recall: find the photo you remember wrong. Muse Spark and SAM 3.1 by Meta (hosted API). MetaCLIP open weights. This page: simple words, ASD-STE100 style.</footer>
+<footer>Recall: find the photo you remember wrong. Muse Spark and SAM 3.1 by Meta. MetaCLIP open weights. This page: simple words, ASD-STE100 style.</footer>
 <script>
   document.querySelectorAll('.hv').forEach(el => {
     const show = () => {

@@ -82,17 +82,25 @@ class ProviderDisabled(RuntimeError):
 class MuseClient:
     """Muse Spark: parse / plan / explain. Disabled without a key."""
 
-    def __init__(self, model: str | None = None, base_url: str = BASE_URL,
+    def __init__(self, model: str | None = None, base_url: str | None = None,
                  api_key: str | None = None) -> None:
-        self.base_url = base_url
-        self.api_key = api_key
-        if not (api_key or _api_key()):
+        # MUSE_BASE_URL and MUSE_API_KEY reach Muse through another host.
+        self.base_url = (base_url or os.environ.get("MUSE_BASE_URL")
+                         or BASE_URL).rstrip("/")
+        self.api_key = api_key or os.environ.get("MUSE_API_KEY") or None
+        if not (self.api_key or _api_key()):
             raise ProviderDisabled(
                 "META_MODEL_API_KEY not set; Muse provider disabled. "
                 "Add it to your local .env (see .env.example)."
             )
         # Read here, not at import: load_dotenv runs after this module loads.
         self.model = model or os.environ.get("MUSE_MODEL") or MUSE_MODEL
+
+    def _reasoning(self) -> dict:
+        """OpenRouter takes the effort in a nested field."""
+        if "openrouter.ai" in self.base_url:
+            return {"reasoning": {"effort": "low"}}
+        return {"reasoning_effort": "low"}
 
     def _chat(self, messages: list[dict], max_tokens: int = 2000) -> str:
         out = _post(
@@ -101,7 +109,7 @@ class MuseClient:
                 "model": self.model,
                 "messages": messages,
                 "max_tokens": max_tokens,
-                "reasoning_effort": "low",
+                **self._reasoning(),
                 "temperature": 0,  # deterministic: eval scores must not drift run to run
             },
             base_url=self.base_url, api_key=self.api_key,
@@ -127,7 +135,7 @@ class MuseClient:
                     }
                 ],
                 "max_tokens": max_tokens,
-                "reasoning_effort": "low",
+                **self._reasoning(),
                 "temperature": 0,
             },
             base_url=self.base_url, api_key=self.api_key,
@@ -136,8 +144,8 @@ class MuseClient:
 
     def parse(self, description: str) -> list[dict]:
         """Description -> validated clue chips [{text,kind,referent}]."""
-        txt = ""
-        for attempt in range(2):  # reasoning models occasionally return empty
+        data: dict | None = None
+        for attempt in range(2):  # reasoning models occasionally return empty or broken JSON
             txt = self._chat(
                 [
                     {"role": "system", "content": _PARSE_SYSTEM},
@@ -145,9 +153,13 @@ class MuseClient:
                 ],
                 max_tokens=2000 + 1000 * attempt,
             )
-            if "{" in txt:
+            try:
+                data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
                 break
-        data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
+            except ValueError:
+                continue
+        if data is None:
+            raise ValueError(f"Muse returned no usable JSON for: {description!r}")
         clues = []
         for c in data.get("clues", []):
             if isinstance(c, dict) and str(c.get("text", "")).strip():
@@ -185,6 +197,46 @@ def rerank_client() -> MuseClient:
     return MuseClient(os.environ.get("RERANK_MODEL") or None,
                       base_url=base_url.rstrip("/"),
                       api_key=os.environ.get("RERANK_API_KEY"))
+
+
+class BackupReranker:
+    """Backup for the AI check: NVIDIA Nemotron 3.5 Rerank. One request scores
+    many photos. Disabled without BACKUP_RERANK_API_KEY."""
+
+    BASE = "https://ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-rerank-8b"
+    model = "nvidia/nemotron-3.5-rerank-8b"
+    CHUNK = 10
+
+    def __init__(self) -> None:
+        self.api_key = os.environ.get("BACKUP_RERANK_API_KEY") or None
+        if not self.api_key:
+            raise ProviderDisabled("BACKUP_RERANK_API_KEY not set")
+
+    def _score_chunk(self, description: str, paths: list[str]) -> dict[str, float]:
+        passages = []
+        for p in paths:
+            mime = "image/png" if p.lower().endswith(".png") else "image/jpeg"
+            b64 = base64.b64encode(open(p, "rb").read()).decode()  # noqa: SIM115
+            passages.append({"image": f"data:{mime};base64,{b64}"})
+        out = _post("/reranking", {"model": self.model, "query": {"text": description},
+                                   "passages": passages},
+                    base_url=self.BASE, api_key=self.api_key)
+        return {paths[r["index"]]: float(r["logit"]) for r in out["rankings"]}
+
+    def logits(self, description: str, paths: list[str]) -> dict[str, float]:
+        """Raw relevance per photo. A failed chunk is left out."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def safe(chunk: list[str]) -> dict[str, float]:
+            try:
+                return self._score_chunk(description, chunk)
+            except Exception:  # noqa: BLE001: those photos stay neutral
+                return {}
+
+        chunks = [paths[i : i + self.CHUNK] for i in range(0, len(paths), self.CHUNK)]
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            results = list(ex.map(safe, chunks))
+        return {k: v for r in results for k, v in r.items()}
 
 
 class SamClient:
@@ -229,4 +281,4 @@ class SamClient:
 
 
 def providers_enabled() -> bool:
-    return _api_key() is not None
+    return bool(_api_key() or os.environ.get("MUSE_API_KEY"))

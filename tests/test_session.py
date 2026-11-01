@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from backend.recall.clues import Clue
+from backend.recall.clues import Clue, dedupe_clues
 from backend.recall.embeddings import StubEncoder
 from backend.recall.questions import NOT_SURE, SOMETHING_ELSE, YES_SURE
 from backend.recall.retrieve import ExactIndex
@@ -713,3 +713,37 @@ def test_corrections_accumulate_and_survive_reload():
     assert s.sentence == "a blue car parked in grass"
     again = SearchSession.from_dict(s.index, s.encoder, s.to_dict())
     assert again.sentence == s.sentence
+
+
+def test_doubted_clue_gets_the_next_question_and_its_correction():
+    enc = StubEncoder()
+    captions = ["man on a blue raft; large wave", "man on an orange raft; pool", "large wave; beach"]
+    index = ExactIndex([f"img-{i:06d}" for i in range(3)], enc.encode_texts(captions))
+    clues = dedupe_clues([Clue("man", "person", "man"),
+                          Clue("orange raft", "object", "raft"),
+                          Clue("large wave", "object", "wave")])
+    assert clues[1].kind == "colour"
+    s = SearchSession(index, enc, "a man on a orange raft; large wave", clues)
+    s.start()
+    assert s.pending.kind == "subject"
+    s.answer(YES_SURE)
+    assert s.pending.kind == "uncertainty"
+    s.answer("orange raft")
+    assert s.pending.text == "What colour was the raft?"
+    s.answer("blue")
+    assert "blue raft" in s.sentence
+    assert 1 not in s.dropped
+
+
+def test_doubted_clue_stays_removed_when_the_value_is_not_known():
+    enc = StubEncoder()
+    captions = ["man on a blue raft; large wave", "man on an orange raft; pool"]
+    index = ExactIndex([f"img-{i:06d}" for i in range(2)], enc.encode_texts(captions))
+    clues = [Clue("man", "person", "man"), Clue("orange raft", "colour", "raft"),
+             Clue("large wave", "object", "wave")]
+    s = SearchSession(index, enc, "a man on a orange raft; large wave", clues)
+    s.start()
+    s.answer(YES_SURE)
+    s.answer("orange raft")
+    s.answer(NOT_SURE)
+    assert 1 in s.dropped

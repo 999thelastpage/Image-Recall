@@ -93,6 +93,7 @@ def test_colour_question_offers_full_palette():
 
 
 def test_providers_disabled_without_key(monkeypatch):
+    monkeypatch.delenv("MUSE_API_KEY", raising=False)
     monkeypatch.delenv("META_MODEL_API_KEY", raising=False)
     from backend.recall.providers import MuseClient, ProviderDisabled, providers_enabled
 

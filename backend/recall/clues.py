@@ -52,10 +52,19 @@ class Hypothesis:
     dropped_index: int | None
 
 
+def _colour_kind(c: Clue) -> Clue:
+    """'orange raft' is a colour fact, whatever the parser called it, so
+    the user can correct the colour and keep the noun."""
+    words = re.findall(r"[a-z]+", c.text.lower())
+    if c.kind in ("object", "other") and len(words) == 2 and words[0] in COLOUR_WORDS:
+        return Clue(c.text, "colour", c.referent.strip() or words[1])
+    return c
+
+
 def dedupe_clues(clues: list[Clue]) -> list[Clue]:
     seen: set[str] = set()
     uniq: list[Clue] = []
-    for c in clues:
+    for c in map(_colour_kind, clues):
         key = c.text.strip().lower()
         if key and key not in seen:
             seen.add(key)

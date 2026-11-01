@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recall guide: simple instructions and details</title>
+<style>
+  :root{
+    --bg:#f4f4f2; --card:#ffffff; --ink:#1c1e1c; --soft:#4d554d; --faint:#8a918a;
+    --line:#e2e4e0; --accent:#c8500a; --accent-dark:#a63f05;
+    --warn-bg:#fdf0e4; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  a{color:var(--accent-dark)}
+  header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .bar{max-width:880px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
+  .logo span{color:var(--accent)}
+  .bar .spacer{flex:1}
+  .bar a{font-weight:600;font-size:14.5px}
+  main{max-width:880px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:32px;line-height:1.15;letter-spacing:-.02em;margin:6px 0 8px}
+  h2{font-size:22px;margin:38px 0 8px;letter-spacing:-.01em}
+  h3{font-size:17px;margin:20px 0 6px}
+  p,ol,ul{max-width:720px}
+  li{margin:5px 0}
+  .lede{color:var(--soft);font-size:17px;max-width:640px}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 20px;margin:18px 0;max-width:720px}
+  .toc ol{margin:6px 0;padding-left:22px}
+  .note{background:var(--warn-bg);border:1px solid #f0c491;border-radius:var(--radius);padding:12px 18px;margin:14px 0;max-width:720px}
+  .note p{margin:4px 0}
+  .tablewrap{overflow-x:auto;max-width:760px;margin:12px 0}
+  table{border-collapse:collapse;background:var(--card);width:100%;font-size:15px;
+        font-variant-numeric:tabular-nums}
+  caption{text-align:left;color:var(--soft);font-size:14px;padding:0 0 6px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:#f1efe9;font-weight:700}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  td:first-child{min-width:170px}
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-width:760px;margin:14px 0}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--card)}
+  .stat.win{border:2px solid var(--accent);background:#fffaf5}
+  .stat span{display:block}
+  .stat .label{color:var(--soft);font-size:13.5px}
+  .stat .value{font-size:34px;font-weight:700;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat .sub{color:var(--soft);font-size:13px}
+  @media (max-width:640px){.stats{grid-template-columns:1fr}}
+  dl{max-width:720px}
+  dt{font-weight:700;margin-top:10px}
+  dd{margin:2px 0 0;color:var(--soft)}
+  footer{max-width:880px;margin:0 auto;padding:0 20px 34px;color:var(--faint);font-size:13px}
+  @media (max-width:640px){h1{font-size:26px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">Recall<span>.</span></div>
+    <div class="spacer"></div>
+    <a href="/details.html">How it works</a>
+    <a href="/">← Back to home</a>
+  </div>
+</header>
+<main>
+  <h1>Recall guide</h1>
+  <p class="lede">This guide tells you how to use Recall and how Recall operates.
+  It follows the rules of ASD-STE100: short sentences, active verbs and one idea
+  in each sentence.</p>
+
+  <nav class="toc" aria-label="Contents">
+    <b>Contents</b>
+    <ol>
+      <li><a href="#purpose">Purpose</a></li>
+      <li><a href="#use">Find a photo</a></li>
+      <li><a href="#operate">How Recall operates</a></li>
+      <li><a href="#example">Example: a car or a bus</a></li>
+      <li><a href="#results">Test results</a></li>
+      <li><a href="#next">Next step: show near matches</a></li>
+      <li><a href="#terms">Terms</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="purpose">1. Purpose</h2>
+  <p>You can remember a photo but not know all its details. Your description can
+  be vague. One detail can be wrong.</p>
+  <p>A simple search compares all your words with each photo. It does not ask you
+  which words can be wrong.</p>
+  <p>Recall also searches without each detail. Recall can also ask you about the
+  details. You can then correct a detail, or tell Recall that you do not trust it.</p>
+
+  <h2 id="use">2. Find a photo</h2>
+  <h3>Compare two searches</h3>
+  <ol>
+    <li>Select <b>Compare both</b>.</li>
+    <li>Type what you remember.</li>
+    <li>Select <b>Search my photos</b>.</li>
+    <li>Look at the two lists. Each list shows the result of one type of search.</li>
+  </ol>
+  <h3>Correct your description</h3>
+  <ol>
+    <li>Select <b>Ask me questions</b>.</li>
+    <li>Type what you remember.</li>
+    <li>Select <b>Search my photos</b>.</li>
+    <li>Answer each question. Recall asks a maximum of 3 questions.</li>
+    <li>If you do not know the answer, select <b>Not sure</b>.</li>
+    <li>Look at the final list of 10 photos.</li>
+  </ol>
+  <div class="note">
+    <p><b>Note:</b> Recall can ask no questions. This can occur when Recall does not
+    find separate details in your description.</p>
+  </div>
+
+  <h2 id="operate">3. How Recall operates</h2>
+  <h3>Prepare the library</h3>
+  <p>Recall does these steps one time for each photo library.</p>
+  <ol>
+    <li>MetaCLIP makes a list of 768 numbers for each photo.</li>
+    <li>Recall keeps these lists in an index.</li>
+  </ol>
+  <h3>Do the search</h3>
+  <ol>
+    <li>Muse Spark divides your sentence into clues. If Muse Spark is not available,
+    a local word list does this work.</li>
+    <li>MetaCLIP makes a list of numbers for your sentence.</li>
+    <li>Recall compares this list with all photos in the index.</li>
+    <li>Recall does more searches. Each search removes one clue. Other searches try
+    a different colour.</li>
+    <li>Recall puts all scores on one scale.</li>
+    <li>Recall joins the results into one list. Your full sentence has the most weight.</li>
+  </ol>
+  <h3>Use your answers</h3>
+  <ol>
+    <li>If you give a new value, Recall changes your sentence and searches again.
+    This search gets the most weight.</li>
+    <li>If you do not trust a clue, Recall removes it from the sentence that it searches.
+    Then Recall searches again.</li>
+    <li>If you select <b>Not sure</b> about the main subject, Recall does not trust that clue.</li>
+    <li>If you select <b>Not sure</b> about a new value, Recall makes no correction.</li>
+  </ol>
+  <h3>Make the final list</h3>
+  <p>Recall does these steps when you use <b>Ask me questions</b>.</p>
+  <ol>
+    <li>Muse Spark looks at the top 40 photos and gives each photo a score.</li>
+    <li>Recall mixes this score with the search score. The Muse Spark score has 65% of the weight.</li>
+    <li>Recall shows the top 10 photos.</li>
+    <li>You can ask for evidence on the top 3 photos. Muse Spark or SAM 3.1 finds the object in each photo.</li>
+  </ol>
+  <div class="note">
+    <p><b>Note:</b> Recall needs access to Muse Spark. Without
+    this access, Recall uses the local word list, and it does not show evidence.</p>
+  </div>
+
+  <h2 id="example">4. Example: a car or a bus</h2>
+  <p>A user types “a car parked in grass”. The photo in their memory shows a bus.</p>
+  <p>The table shows the positions of two bus photos in the library of 5,000 photos.
+  A low number is good.</p>
+  <div class="tablewrap">
+    <table>
+      <caption>Position of each photo. No AI score is used.</caption>
+      <thead><tr><th>Search</th><th class="n">Yellow bus in grass</th><th class="n">Green bus on grass field</th></tr></thead>
+      <tbody>
+        <tr><td>Simple search</td><td class="n">14</td><td class="n">43</td></tr>
+        <tr><td>Recall, answers “Not sure”, then “A vehicle”</td><td class="n">9</td><td class="n">12</td></tr>
+        <tr><td>Recall, answers “It was something else”, then “bus”</td><td class="n">3</td><td class="n">4</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>One correction moves the photo from position 14 to position 3. Section 5 gives results from many searches.</p>
+
+  <h2 id="results">5. Test results</h2>
+  <p>Each test starts with a description that has one wrong detail: a wrong colour or a
+  wrong object. The user then corrects the detail in Recall.</p>
+  <div class="stats">
+    <div class="stat win"><span class="label">Correct photo in the top 5</span><span class="value">80%</span><span class="sub">Simple search: 63%</span></div>
+    <div class="stat"><span class="label">Photos gained against the same AI check</span><span class="value">+10</span><span class="sub">0 photos lost, top 5</span></div>
+    <div class="stat"><span class="label">Lost photos returned to the top 5</span><span class="value">3.5×</span><span class="sub">7 photos against 2</span></div>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <caption>Number of searches with the correct photo in the list. 60 searches, 5,000 photos.</caption>
+      <thead><tr><th>Test</th><th class="n">Simple search</th><th class="n">Simple search + AI check</th><th class="n">Recall + AI check + correction</th></tr></thead>
+      <tbody>
+        <tr><td>All searches, top 5</td><td class="n">38</td><td class="n">38</td><td class="n"><b>48</b></td></tr>
+        <tr><td>All searches, top 10</td><td class="n">40</td><td class="n">47</td><td class="n"><b>52</b></td></tr>
+        <tr><td>Wrong colour, top 5 (30 searches)</td><td class="n">19</td><td class="n">17</td><td class="n"><b>21</b></td></tr>
+        <tr><td>Wrong object, top 5 (30 searches)</td><td class="n">19</td><td class="n">21</td><td class="n"><b>27</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The “lost photos” result is for 10 searches. In these searches, the wrong detail
+  pushed the photo out of the top 5 of simple search.</p>
+  <h3>How we made this test</h3>
+  <ul>
+    <li>A computer program made each wrong description and gave each correction.</li>
+    <li>The program knows the correct detail.</li>
+    <li>The objects are on the Recall answer list.</li>
+    <li>The AI check is Muse Spark. It gives both searches the same check.</li>
+    <li>“New searches” are searches that we did not use to tune Recall.</li>
+  </ul>
+
+  <h2 id="next">6. Next step: show near matches</h2>
+  <p>You can look for a photo and not know the correct word. Recall can use this idea in
+  a new way. It can change “a car parked in grass” to “a vehicle parked in grass”.
+  It can then show these near matches in the list. You do not answer a question.</p>
+  <p>We tested this idea in an experiment. It is not in Recall at this time. The test
+  had 120 descriptions, each with a wrong object, and 5,000 photos. A word list that we
+  wrote for this test gives the general words.</p>
+  <div class="tablewrap">
+    <table>
+      <caption>Number of searches, top 10. The experiment keeps 7 simple search results and adds 3 near matches.</caption>
+      <thead><tr><th>Result</th><th class="n">Simple search</th><th class="n">With near matches</th></tr></thead>
+      <tbody>
+        <tr><td>The correct type of object in a similar place</td><td class="n">82</td><td class="n"><b>98</b></td></tr>
+        <tr><td>The exact photo</td><td class="n">58</td><td class="n"><b>70</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="terms">7. Terms</h2>
+  <dl>
+    <dt>Clue</dt><dd>One part of your description, for example “red bus” or “in grass”.</dd>
+    <dt>MetaCLIP</dt><dd>A Meta model. It changes photos and words into lists of numbers.</dd>
+    <dt>Muse Spark</dt><dd>A Meta model. It reads text and looks at photos.</dd>
+    <dt>SAM 3.1</dt><dd>A Meta model. It finds objects in a photo.</dd>
+    <dt>Top 10</dt><dd>The first 10 photos in a list.</dd>
+  </dl>
+</main>
+<footer>Results measured on 1 November 2026.</footer>
+</body>
+</html>

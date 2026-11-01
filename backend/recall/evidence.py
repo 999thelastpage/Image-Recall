@@ -21,6 +21,28 @@ COLOURS: dict[str, tuple[int, int, int]] = {
 }
 
 
+def muse_evidence(client, image_path: str, subject: str,
+                  said_colour: str | None = None) -> dict:
+    """Muse vision reads the same facts when SAM is not available.
+    Raises if the reply has no usable JSON; the caller reports that."""
+    import json
+
+    ask = (f'Look at this photo. Is "{subject}" visible? Return ONLY JSON: '
+           '{"found": true|false, "count": <integer or null>'
+           + (', "colour": "<main colour of it, one word, or null>"' if said_colour else "")
+           + "}")
+    txt = client.chat_with_image(image_path, ask)
+    data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
+    found = data.get("found") is True
+    count = data.get("count")
+    out: dict = {"found": found, "evidence_source": "Muse Spark",
+                 "count_found": count if found and isinstance(count, int) and count > 0 else None}
+    colour = data.get("colour")
+    if found and said_colour and isinstance(colour, str) and colour.strip():
+        out["colour"] = colour.strip().lower()
+    return out
+
+
 def parse_sam_box(text: str) -> dict | None:
     boxes = parse_boxes(text)
     return boxes[0] if boxes else None

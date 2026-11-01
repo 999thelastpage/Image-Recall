@@ -34,3 +34,37 @@ def test_dominant_colour_reads_box(tmp_path):
     out = dominant_colour(str(path), {"x1": 16, "y1": 16, "x2": 47, "y2": 47, "w": 64, "h": 64})
     assert out["colour"] == "red"
     assert out["box"] == [16, 16, 47, 47]
+
+
+class _Vision:
+    def __init__(self, reply):
+        self.reply = reply
+
+    def chat_with_image(self, path, prompt, max_tokens=800):
+        return self.reply
+
+
+def test_muse_evidence_reads_found_count_and_colour():
+    from backend.recall.evidence import muse_evidence
+
+    got = muse_evidence(_Vision('x {"found": true, "count": 2, "colour": "Green"}'),
+                        "p.jpg", "bus", said_colour="purple bus")
+    assert got == {"found": True, "evidence_source": "Muse Spark",
+                   "count_found": 2, "colour": "green"}
+
+
+def test_muse_evidence_not_found_reports_no_count_or_colour():
+    from backend.recall.evidence import muse_evidence
+
+    got = muse_evidence(_Vision('{"found": false, "count": 3, "colour": "red"}'),
+                        "p.jpg", "bus", said_colour="red bus")
+    assert got == {"found": False, "evidence_source": "Muse Spark", "count_found": None}
+
+
+def test_muse_evidence_raises_without_json():
+    import pytest
+
+    from backend.recall.evidence import muse_evidence
+
+    with pytest.raises(ValueError):
+        muse_evidence(_Vision("no answer"), "p.jpg", "bus")
