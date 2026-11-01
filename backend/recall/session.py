@@ -124,6 +124,7 @@ class SearchSession:
     dimension_checked: bool = False
     doubted_dimension: int | None = None
     dimension_pending: bool = False
+    followup: int | None = None  # the clue the user just doubted: ask its value next
     sentence: str = ""  # the description with the user's corrections applied
     question_history: list[str] = field(default_factory=list)
     needs_details: bool = False
@@ -251,6 +252,15 @@ class SearchSession:
         ):
             i = self.doubted_dimension
             return attribute_template(self.clues[i], i, n)
+        if self.followup is not None:
+            i, self.followup = self.followup, None
+            clue = self.clues[i]
+            if clue.kind == "setting":
+                return attribute_template(clue, i, n, options=self._setting_options())
+            if clue.kind in ("object", "person"):
+                return attribute_template(clue, i, n, options=self._object_options(i))
+            if clue.kind in ("colour", "count"):
+                return attribute_template(clue, i, n)
         # subject doubt on a bundled clue: settle its dimension
         # before asking for a replacement noun
         if self.dimension_pending and not self.dimension_checked:
@@ -380,8 +390,10 @@ class SearchSession:
                             self.doubted_anchor = i
                         else:
                             self._drop_clue(i)
+                            self.followup = i
                         break
             elif q.kind == "attribute" and q.clue_index is not None:
+                self.dropped.discard(q.clue_index)  # corrected, so no longer doubted
                 if self.doubted_anchor is not None \
                         and q.clue_index == self.doubted_anchor:
                     effective = self._replace_clue(
@@ -563,6 +575,7 @@ class SearchSession:
             "subject_checked": self.subject_checked,
             "dimension_checked": self.dimension_checked,
             "doubted_dimension": self.doubted_dimension,
+            "followup": self.followup,
             "dimension_pending": self.dimension_pending,
             "sentence": self.sentence,
             "question_history": list(self.question_history),
@@ -601,6 +614,7 @@ class SearchSession:
             "dimension_checked",
             any(a.kind == "dimension" for a in s.answers)))
         s.doubted_dimension = data.get("doubted_dimension")
+        s.followup = data.get("followup")
         s.dimension_pending = bool(data.get("dimension_pending", False))
         s.sentence = data.get("sentence", data["description"])
         s.question_history = list(data.get("question_history", []))

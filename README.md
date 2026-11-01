@@ -45,19 +45,19 @@ timings, clue chips, and rescued candidates outlined in green.
 
 ## How it works
 
-- **Muse Spark 1.3** (Meta Model API) parses a free description
-  into clue chips, reranks the top 40 at finish, and writes
-  grounded explanations. Questions are deterministic templates
-  (subject, bundled colour/count dimension, uncertainty,
-  attribute), never model-invented. Disabled cleanly when no key
-  is set; the offline lexicon parser then splits a plain sentence
-  into colour, count, object, setting and activity clues.
-- **SAM 3.1** (Meta Model API) segments the referred object in top
-  candidates; colour/count evidence is sampled inside the mask and
-  shown (“you said red — this jacket is orange”).
+- **Muse Spark 1.3** (through OpenRouter or the Meta Model API) parses a free
+  description into clue chips, reranks the top 40 at finish, and reads evidence
+  from the top photos. Questions are deterministic templates (subject, bundled
+  colour/count dimension, uncertainty, attribute), never model-invented. Without
+  a key, the offline lexicon parser splits a plain sentence into colour, count,
+  object, setting and activity clues.
+- **SAM 3.1** (Meta Model API) segments the referred object in top candidates
+  when a Meta API key is set; colour/count evidence is then sampled inside the
+  mask. Without it, Muse Spark vision reads the same facts.
 - **MetaCLIP-L14** (`facebook/metaclip-l14-fullcc2.5b`, Meta open
   weights) embeds images and text for exact cosine retrieval.
-- Our orchestration: leave-one-clue-out plus relax-one-modifier
+- Our orchestration: a search of the user's full sentence, corrections that edit
+  that sentence, plus leave-one-clue-out, relax-one-modifier
   (`purple bus` → `bus`) and limited colour-substitution branches,
   per-branch candidate union with reserved quotas, reciprocal-rank
   support as a close-call tiebreak, soft scoring (no hard filters;
@@ -73,23 +73,20 @@ chips. SAM 3.1: exact box in 1.8s.
 Gate G1 (10 hand-made wrong-colour cases, 5k corpus): branch
 union contains the target **9/10** vs plain-search Hit@5 6/10.
 
-Gate G2, expanded (60 wrong-clue cases: 30 wrong-colour, 30
-wrong-object, +10 accurate; simulated truthful user, ≤3 questions,
-doubt-aware Muse rerank of the top 40 at finish): wrong-clue
-Hit@5 **36/60 → 43/60** (colour 19→21, object 17→22, accurate
-4/10 → 5/10). Earlier 20-case runs read 13/20 and, on re-run,
-8/20 — the small set was noise, so the 60-case number is the one
-to quote. Failure layers were measured per case (coverage /
-answer-demotion / ranking / encoder ceiling): answers can no
-longer lower a candidate's score, every candidate is rescored
-under the revised query, and the branch quota at 5k is 150.
-Ceiling, also measured: with the *true* caption the encoder puts
-the target in the top 5 in only 15/20 diagnostic cases, so 90%+
-on wrong-clue cases is not reachable with this encoder; the next
-lever is an encoder swap judged on that ceiling first. A first
-run failed (9/20) because dropping the main object noun destroys
-a query; the shipped rule is now *modifiers are dropped, anchors
-are replaced*, with a regression test.
+Wrong-detail test on Muse Spark (`meta/muse-spark-1.3-contributor`), 60
+searches not used for tuning (30 wrong-colour, 30 wrong-object, 5,000 photos).
+A simulated user corrects the detail in at most 3 questions, and simple search
+gets the same AI check:
+
+| Correct photo in the list | Simple search | Simple + AI check | Recall + AI check + correction |
+|---|---|---|---|
+| Top 5 | 38/60 | 38/60 | **48/60** (80%) |
+| Top 10 | 40/60 | 47/60 | **52/60** (87%) |
+
+Against simple search with the same AI check, Recall gained 10 photos in the top
+5 and lost none. In the 10 searches where the wrong detail pushed the photo out
+of simple search's top 5, Recall returned 7 and simple search with the AI check
+returned 2.
 
 Corpus scale vs quality (100 own-caption queries per corpus,
 `scripts/quality_check.py`). Encoder upgraded B32 → L14 on
@@ -144,10 +141,9 @@ top 10, questions ask the bundled colour/count dimension on its
 own, never repeat or re-offer a dropped clue, and derive options
 from the session (colour palette with swatches, session settings).
 `scripts/encoder_ab.py` gates any encoder swap on the true-caption
-ceiling; no swap has been run yet, so the 43/60 number above still
-stands until it is re-measured. Live corpora in this workspace:
+ceiling. Live corpora in this workspace:
 5,000 COCO val + 82,783 COCO train2014, both on MetaCLIP-L14.
-Tests: 82 passing.
+Tests: 105 passing.
 
 Remaining (human steps): record the 2.5-minute video; submit the
 form (copy is paste-ready). The hosted demo is live at the URL

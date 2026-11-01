@@ -382,6 +382,57 @@ def search(req: SearchRequest) -> dict:
 
 _sessions: dict[str, dict] = {}
 
+# Paid AI checks: repeats are free, and new checks have an hourly limit.
+RERANKS_PER_HOUR = int(os.environ.get("RERANKS_PER_HOUR", "30"))
+_rerank_scores: dict = {}
+_rerank_times: list[float] = []
+
+
+def _take_rerank_slot(now: float | None = None) -> bool:
+    """False when the hourly limit is used. Does not persist across restarts."""
+    now = time.time() if now is None else now
+    _rerank_times[:] = [t for t in _rerank_times if now - t < 3600]
+    if len(_rerank_times) >= RERANKS_PER_HOUR:
+        return False
+    _rerank_times.append(now)
+    return True
+
+
+def _new_reranker(client, max_workers: int = 8):
+    from backend.recall.rerank import MuseReranker
+
+    if len(_rerank_scores) > 20000:
+        _rerank_scores.clear()
+    return MuseReranker(client, max_workers=max_workers, cache=_rerank_scores)
+
+
+PRIMARY_RETRY_SECONDS = 600
+_primary_retry_at = [0.0]
+
+
+def _ai_check(candidates: list, paths: dict, description: str) -> tuple[list, str]:
+    """(ranked, model name). Tries the main model, then the backup. After the
+    main model fails, it waits before the next try, so a search stays fast."""
+    from backend.recall.providers import BackupReranker
+    from backend.recall.rerank import RERANK_TOP_N, MuseReranker, ScoreTable
+
+    if time.time() >= _primary_retry_at[0] and _take_rerank_slot():
+        try:
+            client = rerank_client()
+            ranked = _new_reranker(client).rerank(candidates, paths, description)
+            if any(r.muse is not None for r in ranked):
+                return ranked, client.model
+        except Exception:  # noqa: BLE001: the backup is next
+            pass
+        _primary_retry_at[0] = time.time() + PRIMARY_RETRY_SECONDS
+    backup = BackupReranker()  # raises when not configured
+    head = [paths[c.image_id] for c in candidates[:RERANK_TOP_N]]
+    logits = backup.logits(description, head)
+    if not logits:
+        raise RuntimeError("no image could be scored")
+    table = ScoreTable(backup.model, logits)
+    return MuseReranker(table, max_workers=8).rerank(candidates, paths, description), backup.model
+
 
 
 def _save_session(rec: dict) -> None:
@@ -523,15 +574,9 @@ def finish_session(session_id: str) -> dict:
     # Muse key the encoder order stands and we say so.
     out["reranked"] = False
     try:
-        from backend.recall.rerank import MuseReranker
-
         paths = {i: e.path for i, e in entries.items()}
-        client = rerank_client()
-        ranked = MuseReranker(client, max_workers=8).rerank(
-            s.candidates, paths, _doubt_aware(s))
-        if all(r.muse is None for r in ranked):
-            raise RuntimeError("no image could be scored")
-        out["rerank_model"] = client.model
+        ranked, out["rerank_model"] = _ai_check(s.candidates, paths, _doubt_aware(s))
+        rec["final_ids"] = [r.image_id for r in ranked[:FINAL_TOP_K]]
         out["results"] = [
             {"image_id": r.image_id, "score": round(r.final, 4),
              "muse_score": (None if r.muse is None else round(r.muse, 2)),
@@ -555,12 +600,8 @@ def rerank_session(session_id: str) -> dict:
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     paths = {i: e.path for i, e in entries.items()}
     try:
-        from backend.recall.rerank import MuseReranker
-
-        out = MuseReranker(rerank_client()).rerank(
-            s.candidates, paths, _doubt_aware(s))
-        if all(r.muse is None for r in out):
-            raise RuntimeError("no image could be scored")
+        out, _model = _ai_check(s.candidates, paths, _doubt_aware(s))
+        rec["final_ids"] = [r.image_id for r in out[:FINAL_TOP_K]]
     except Exception as e:  # noqa: BLE001
         raise HTTPException(503, f"rerank unavailable: {type(e).__name__}") from e
     return {
@@ -591,7 +632,12 @@ def session_evidence(session_id: str) -> dict:
     rec = _get_rec(session_id)
     s = rec["session"]
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
-    from backend.recall.evidence import claimed_count, dominant_colour, parse_boxes
+    from backend.recall.evidence import (
+        claimed_count,
+        dominant_colour,
+        muse_evidence,
+        parse_boxes,
+    )
 
     colour = next((c for c in s.clues if c.kind == "colour"), None)
     count = next((c for c in s.clues if c.kind == "count"), None)
@@ -607,13 +653,27 @@ def session_evidence(session_id: str) -> dict:
     if said_count is None and anchor is not None:
         said_count = claimed_count(anchor.text)  # 'two dogs' is one clue
     claims = [c.text for c in s.clues if c.kind in ("setting", "activity")]
+    # Check what the user corrected to, not the words they first typed.
+    from backend.recall.questions import NOT_SURE
+
+    for a in s.answers:
+        if a.kind != "attribute" or a.clue_index is None or a.value == NOT_SURE:
+            continue
+        clue = s.clues[a.clue_index]
+        if clue is anchor or clue.kind in ("object", "person"):
+            prompt, said_count = a.value, None
+        elif clue is colour:
+            said_colour = a.value
     try:
         from backend.recall.providers import MuseClient, SamClient
 
-        sam = SamClient()
         muse = MuseClient()
     except Exception as e:  # noqa: BLE001
         raise HTTPException(503, f"evidence unavailable: {type(e).__name__}") from e
+    try:
+        sam = SamClient()
+    except Exception:  # noqa: BLE001: Muse vision reads the facts instead
+        sam = None
 
     def check(cand) -> dict:
         e = entries.get(cand.image_id)
@@ -623,16 +683,22 @@ def session_evidence(session_id: str) -> dict:
             item["error"] = "image unavailable"
             return item
         try:
+            if sam is None:
+                raise RuntimeError("SAM not available")
             got = sam.segment(e.path, prompt)
             boxes = parse_boxes(got["text"])
             item["seconds"] = got["seconds"]
             item["found"] = len(boxes) > 0
             item["count_found"] = len(boxes) if boxes else None
+            item["evidence_source"] = "SAM 3.1"
             if boxes and said_colour:
                 item.update(dominant_colour(e.path, boxes[0]))
-        except Exception as ex:  # noqa: BLE001
-            item["error"] = f"{type(ex).__name__}"
-            return item
+        except Exception:  # noqa: BLE001: SAM down, Muse vision reads the facts
+            try:
+                item.update(muse_evidence(muse, e.path, prompt, said_colour))
+            except Exception as ex:  # noqa: BLE001
+                item["error"] = f"{type(ex).__name__}"
+                return item
         if claims:
             try:
                 ask = ("For each statement, answer yes, no, or unsure based "
@@ -651,8 +717,14 @@ def session_evidence(session_id: str) -> dict:
 
     from concurrent.futures import ThreadPoolExecutor
 
+    # The proof is for the photos on the screen, in the order on the screen.
+    shown = rec.get("final_ids") or []
+    by_id = {c.image_id: c for c in s.candidates}
+    top = [by_id[i] for i in shown if i in by_id][:3] or s.candidates[:3]
     with ThreadPoolExecutor(max_workers=3) as ex:
-        out = list(ex.map(check, s.candidates[:3]))
+        out = list(ex.map(check, top))
+    if out and all(item.get("error") for item in out):
+        raise HTTPException(503, "Evidence is not available right now.")
     return {"session_id": session_id, "evidence": out,
             "claims_checked": {"colour": bool(colour),
                                "count": said_count is not None,

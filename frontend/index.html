@@ -148,6 +148,7 @@
     <div class="logo">Recall<span>.</span></div>
     <span class="liblabel">finds the photo you remember wrong</span>
     <a class="liblabel" href="/details.html" style="color:var(--accent-dark);font-weight:600">How it works</a>
+    <a class="liblabel" href="/guide.html" style="color:var(--accent-dark);font-weight:600">Guide</a>
     <div class="spacer"></div>
     <label class="liblabel" for="corpus">Photo library</label>
     <select id="corpus"></select>
@@ -250,9 +251,10 @@
     choose a photo privately, then try to find it from a faulty memory.
   </div>
 </main>
-<footer id="footNote">Recall runs on this computer. Hosted AI (Muse Spark / SAM) is used only
+<footer id="footNote">Recall runs on this computer. Hosted AI is used only
 for parsing, double-checks and evidence when a key is configured: photos in your
-own folders are embedded locally and never leave the machine.</footer>
+own folders are embedded on this computer. When a key is configured, the top photos of a
+search go to the hosted model for the double-check.</footer>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -544,7 +546,7 @@ async function finishSess(){
   if (Array.isArray(out.results) && out.results.length){
     const topScore = out.results[0].score || 1;
     $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-      {topScore, note: out.reranked ? `AI score ${it.muse_score ?? '-'}/10` : undefined})).join('');
+      {topScore, note: out.reranked ? `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10` : undefined})).join('');
     if (out.reranked){
       $('resultsTitle').textContent = 'Your final results';
       $('statsLine').textContent = 'Final order after the AI double-check of the top photos.';
@@ -561,14 +563,14 @@ async function finishSess(){
   } catch(e) {}
 }
 $('rerankBtn').onclick = async () => {
-  $('enhanceStat').textContent = 'AI is re-checking the top 10… (~15 seconds)';
+  $('enhanceStat').textContent = 'AI is re-checking the top photos… (~30 seconds)';
   const r = await fetch(`/api/session/${sessionId}/rerank`, {method:'POST'});
   const out = await r.json();
   if (!r.ok){ $('enhanceStat').textContent = out.detail || 'Double-check unavailable right now.'; return; }
   $('enhanceStat').textContent = 'Re-ordered by the AI double-check.';
   const topScore = out.results.length ? out.results[0].score : 1;
   $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-    {topScore, note: `AI score ${it.muse_score ?? '-'}/10`})).join('');
+    {topScore, note: `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10`})).join('');
 };
 $('evidenceBtn').onclick = async () => {
   $('enhanceStat').textContent = 'Looking closely at the top 3…';
@@ -597,8 +599,9 @@ fetch('/api/meta').then(r => r.json()).then(m => {
   if (!m.demo) return;
   document.querySelector('.addphotos').style.display = 'none';
   $('footNote').textContent = 'Hosted demo: 5,000 photos (COCO val2017). ' +
-    'Muse Spark parses your description, SAM 3.1 checks the evidence; ' +
-    'adding your own folders is disabled here.';
+    'AI reads your description and double-checks the top photos. ' +
+    'The AI provider may use the text you type and these demo photos to train models. ' +
+    'Adding your own folders is disabled here.';
 }).catch(() => {});
 </script>
 </body>

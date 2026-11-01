@@ -84,19 +84,40 @@ def _znorm(values: list[float]) -> list[float]:
     return [min(1.0, max(0.0, ((v - mean) / std + 2.0) / 4.0)) for v in values]
 
 
+class ScoreTable:
+    """Scores made in advance, in the form MuseReranker reads, so a backup
+    model uses the same blend and demotion guard."""
+
+    def __init__(self, model: str, logits: dict[str, float]) -> None:
+        self.model = model
+        paths = list(logits)
+        self.scores = dict(zip(paths, _znorm([logits[p] for p in paths]), strict=True))
+
+    def chat_with_image(self, path: str, prompt: str, max_tokens: int = 800) -> str:
+        return json.dumps({"score": self.scores[path] * 10})
+
+
 class MuseReranker:
-    def __init__(self, muse_client, max_workers: int = 4) -> None:
+    def __init__(self, muse_client, max_workers: int = 4,
+                 cache: dict | None = None) -> None:
         self.client = muse_client
         self.max_workers = max_workers
+        self.cache = cache  # shared scores: a repeat check costs nothing
 
     def _score(self, args) -> float | None:
         path, description = args
+        key = (getattr(self.client, "model", ""), path, description)
+        if self.cache is not None and key in self.cache:
+            return self.cache[key]
         try:
             txt = self.client.chat_with_image(
                 path, _PROMPT.format(desc=description)
             )
             data = json.loads(txt[txt.index("{") : txt.rindex("}") + 1])
-            return max(0.0, min(10.0, float(data["score"]))) / 10.0
+            score = max(0.0, min(10.0, float(data["score"]))) / 10.0
+            if self.cache is not None:
+                self.cache[key] = score
+            return score
         except Exception:  # noqa: BLE001: a failed score is neutral
             return None
 
