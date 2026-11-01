@@ -15,6 +15,7 @@ Muse parsing is used only when META_MODEL_API_KEY is set (.env).
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 import uuid
@@ -661,6 +662,9 @@ def session_evidence(session_id: str) -> dict:
             continue
         clue = s.clues[a.clue_index]
         if clue is anchor or clue.kind in ("object", "person"):
+            old = clue.referent.strip() or clue.text
+            claims = [re.sub(rf"\b{re.escape(old)}\b", a.value, c, flags=re.I)
+                      for c in claims]
             prompt, said_count = a.value, None
         elif clue is colour:
             said_colour = a.value
