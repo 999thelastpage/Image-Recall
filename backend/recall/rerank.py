@@ -17,7 +17,10 @@ from dataclasses import dataclass
 from .rank import Candidate
 
 RERANK_WEIGHT = 0.65
-RERANK_TOP_N = 40
+RERANK_TOP_N = 80
+GUARD_TOP = 5    # union candidates protected from deep demotion
+GUARD_FLOOR = 10  # they cannot fall below this rank on a weak Muse score
+GUARD_MIN_MUSE = 0.1  # at or below this, Muse may demote freely
 
 _PROMPT = (
     "A user is looking for a photo they described as: \"{desc}\"\n"
@@ -104,6 +107,7 @@ class MuseReranker:
         description: str,
         top_n: int = RERANK_TOP_N,
         weight: float = RERANK_WEIGHT,
+        colour_matches: dict[str, bool | None] | None = None,
     ) -> list[RerankedCandidate]:
         head, tail = candidates[:top_n], candidates[top_n:]
         enc_norm = _znorm([c.score for c in head])
@@ -114,9 +118,26 @@ class MuseReranker:
         for cand, enc_n, ms in zip(head, enc_norm, muse_scores, strict=True):
             muse_part = ms if ms is not None else enc_n  # neutral fallback
             final = (1 - weight) * enc_n + weight * muse_part
+            if colour_matches is not None:
+                verdict = colour_matches.get(cand.image_id)
+                if verdict is True:
+                    final += 0.05
+                elif verdict is False:
+                    final -= 0.05  # soft only; None abstains
             out.append(RerankedCandidate(cand.image_id, final, cand.score, ms,
                                          list(cand.branches)))
         out.sort(key=lambda r: (-r.final, r.image_id))
+        # Demotion guard: a union top-5 candidate with a non-trivial
+        # Muse score cannot be buried below rank 10 by the blend.
+        # Measured failure: union 2 -> final 167 on a middling score.
+        orig_pos = {c.image_id: i for i, c in enumerate(head)}
+        for r in list(out):
+            if orig_pos.get(r.image_id, 99) < GUARD_TOP \
+                    and r.muse is not None and r.muse > GUARD_MIN_MUSE:
+                pos = out.index(r)
+                if pos >= GUARD_FLOOR:
+                    out.pop(pos)
+                    out.insert(GUARD_FLOOR - 1, r)
         out.extend(
             RerankedCandidate(c.image_id, -1.0, c.score, None, list(c.branches))
             for c in tail

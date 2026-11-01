@@ -76,7 +76,13 @@ def classify_failure(base_rank, union_rank, final_rank, hit_k: int = 5) -> str:
     return "ranking"
 
 
-def simulate(session, case: dict) -> None:
+def _rank(session, target: str):
+    return next((r for r, c in enumerate(session.candidates, 1)
+                 if c.image_id == target), None)
+
+
+def simulate(session, case: dict, target: str | None = None,
+             stages: list | None = None) -> None:
     from backend.recall.questions import NOT_SURE, SOMETHING_ELSE, YES_SURE
 
     while session.pending is not None and len(session.answers) < 3:
@@ -107,6 +113,8 @@ def simulate(session, case: dict) -> None:
                     and case["true"] in q.options:
                 value = case["true"]
         session.answer(value)
+        if stages is not None and target is not None:
+            stages.append(_rank(session, target))
 
 
 def main() -> int:
@@ -152,9 +160,10 @@ def main() -> int:
                  for c in chips if len(c["text"].strip()) > 1]
         s = SearchSession(index, enc, case["query"], clues)
         s.start()
-        union_rank = next((r for r, c in enumerate(s.candidates, 1)
-                           if c.image_id == target), None)
-        simulate(s, case)
+        union_rank = _rank(s, target)
+        stages: list = []
+        simulate(s, case, target=target, stages=stages)
+        pre_rerank_rank = _rank(s, target)
         out = s.finish()
         final_rank = next((r for r, x in enumerate(out["results"], 1)
                            if x["image_id"] == target), None)
@@ -172,17 +181,22 @@ def main() -> int:
                 and a.value != NOT_SURE]
             desc = doubt_aware_description(case["query"], dropped, corrections)
             paths = {e.image_id: e.path for e in entries}
+            from backend.recall.rerank import RERANK_TOP_N, RERANK_WEIGHT
+
             ranked = MuseReranker(muse, max_workers=8).rerank(
-                s.candidates, paths, desc, top_n=40, weight=0.65)
+                s.candidates, paths, desc,
+                top_n=RERANK_TOP_N, weight=RERANK_WEIGHT)
             full_rank = next((r for r, x in enumerate(ranked, 1)
                               if x.image_id == target), None)
         recall_hit = full_rank is not None and full_rank <= 5
         layer = classify_failure(base_rank, union_rank, full_rank)
         rows.append({**case, "base_hit": base_hit, "recall_hit": recall_hit,
                      "base_rank": base_rank, "final_rank": full_rank,
-                     "union_rank": union_rank, "layer": layer})
+                     "union_rank": union_rank, "layer": layer,
+                     "stages": stages, "pre_rerank_rank": pre_rerank_rank})
         print(f"[{i:2d}] {case['kind']:8s} base={str(base_rank):>5s} "
-              f"union={str(union_rank):>5s} final={str(full_rank):>5s} "
+              f"union={str(union_rank):>5s} stages={stages} "
+              f"pre={str(pre_rerank_rank):>5s} final={str(full_rank):>5s} "
               f"layer={layer} {'REPAIRED' if recall_hit and not base_hit else ''} "
               f"| {case['query'][:58]}")
 
@@ -195,6 +209,12 @@ def main() -> int:
     from collections import Counter
 
     print("failure layers:", dict(Counter(r["layer"] for r in rows)))
+    for r in rows:
+        if r["layer"] == "ranking-demotion":
+            src = "rerank" if (r["pre_rerank_rank"] or 999) <= 5 else "answers"
+            print(f"demotion via {src}: union={r['union_rank']} "
+                  f"stages={r['stages']} pre={r['pre_rerank_rank']} "
+                  f"final={r['final_rank']} | {r['file']}")
     wrong = [r for r in rows if r["kind"] != "accurate"]
     b = sum(r["base_hit"] for r in wrong)
     r_ = sum(r["recall_hit"] for r in wrong)
