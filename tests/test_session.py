@@ -638,3 +638,20 @@ def test_cake_setting_question_offers_kitchen_option():
     s.answer(NOT_SURE)  # uncertainty, neutral
     assert s.pending is not None and s.pending.kind == "attribute"
     assert any("kitchen" in o for o in s.pending.options)
+
+
+def test_colour_fix_after_subject_doubt_keeps_noun_and_drops_wrong_colour():
+    enc = _RecordingEncoder()
+    s = _purple_session(enc)
+    s.answer(SOMETHING_ELSE)  # subject doubted
+    s.answer(SOMETHING_ELSE)  # the colour is the wrong part
+    assert s.pending is not None and s.pending.kind == "attribute"
+    assert "colour" in s.pending.text
+    before = len(enc.seen)
+    s.answer("blue")
+    answer_queries = enc.seen[before:]
+    assert any("blue car" in t for t in answer_queries), answer_queries
+    assert not any("purple" in t for t in answer_queries), answer_queries
+    assert s.answers[-1].value == "blue"
+    # the noun was never doubted once the colour took the blame
+    assert s.pending is None or s.pending.kind != "attribute"
