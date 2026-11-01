@@ -14,7 +14,7 @@ from backend.app import (
 from backend.recall.clues import Clue
 from backend.recall.embeddings import StubEncoder
 from backend.recall.manifest import ManifestEntry
-from backend.recall.questions import NOT_SURE, SOMETHING_ELSE
+from backend.recall.questions import NOT_SURE, SOMETHING_ELSE, YES_SURE
 from backend.recall.retrieve import ExactIndex
 from backend.recall.session import SearchSession
 
@@ -122,6 +122,7 @@ def test_doubt_aware_replaced_subject_not_excluded():
     s = _dogs_app_session()
     s.answer(SOMETHING_ELSE)
     assert s.dropped == set()
+    s.answer(YES_SURE)  # count settled, noun is the doubt
     s.answer("cat")  # replacement: anchor NOT dropped
     assert s.dropped == set()
     out = _doubt_aware(s)

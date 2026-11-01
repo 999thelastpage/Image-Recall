@@ -55,14 +55,9 @@ def dimension_question(clue, idx: int, n: int) -> Question:
             qid=f"q{n}", kind="dimension",
             text=f"Are you sure {what}?",
             options=[YES_SURE, NOT_SURE, SOMETHING_ELSE], clue_index=idx)
-    import re as _re
-
-    m = _re.search(r"\d+|one|two|three|four|five|six|seven|eight|nine|ten", low)
-    what = f"there were {m.group(0)} {clue.referent}".strip() if m \
-        else f"'{clue.text}'"
     return Question(
         qid=f"q{n}", kind="dimension",
-        text=f"Are you sure {what}?",
+        text=f"Are you sure it was '{clue.text}'?",
         options=[YES_SURE, NOT_SURE, SOMETHING_ELSE], clue_index=idx)
 
 

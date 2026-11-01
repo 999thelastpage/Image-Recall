@@ -258,6 +258,8 @@ def test_something_else_on_colour_anchor_asks_replacement_nouns():
     s.answer(SOMETHING_ELSE)
     assert s.dropped == set()
     assert s.doubted_anchor == 0
+    assert s.pending is not None and s.pending.kind == "dimension"
+    s.answer(YES_SURE)
     assert s.pending is not None and s.pending.kind == "attribute"
     assert s.pending.clue_index == 0
     assert "bus" in s.pending.options
@@ -269,6 +271,7 @@ def test_bus_answer_preserves_colour_and_swaps_subject_everywhere():
     enc = _RecordingEncoder()
     s = _purple_session(enc)
     s.answer(SOMETHING_ELSE)
+    s.answer(YES_SURE)  # colour settled, noun is the doubt
     before = len(enc.seen)
     s.answer("bus")
     assert s.answers[-1].value == "purple bus"
@@ -443,9 +446,10 @@ def test_two_dogs_something_else_replacement_and_correction():
     assert s.pending.clue_index == 0
     s.answer(SOMETHING_ELSE)
     assert s.doubted_anchor == 0
-    assert s.pending is not None and s.pending.kind == "attribute"
-    assert s.pending.clue_index == 0
+    assert s.pending is not None and s.pending.kind == "dimension"
     assert "two dogs" in s.pending.text
+    s.answer(YES_SURE)
+    assert s.pending is not None and s.pending.kind == "attribute"
     before = len(enc.seen)
     s.answer("cat")
     assert s.answers[-1].value == "two cats"
@@ -470,6 +474,7 @@ def test_two_dogs_singular_referent_still_swaps_to_two_cats():
     assert "two dogs" in s.pending.text
     s.answer(SOMETHING_ELSE)
     assert s.pending is not None and "two dogs" in s.pending.text
+    s.answer(YES_SURE)  # count settled, noun is the doubt
     before = len(enc.seen)
     s.answer("cat")
     assert s.answers[-1].value == "two cats"
@@ -573,6 +578,16 @@ def test_confident_colour_path_asks_dimension_then_uncertainty():
     s.answer(YES_SURE)
     kinds.append(s.pending.kind if s.pending else None)
     assert kinds == ["subject", "dimension", "uncertainty"]
+
+
+def test_subject_doubt_on_bundled_colour_settles_dimension_first():
+    s = _purple_session()
+    s.answer(SOMETHING_ELSE)
+    # dimension is settled before the replacement noun is asked
+    assert s.pending is not None and s.pending.kind == "dimension"
+    s.answer(SOMETHING_ELSE)
+    assert s.pending is not None and s.pending.kind == "attribute"
+    assert "colour" in s.pending.text
 
 
 def test_dimension_doubt_reaches_colour_attribute():
