@@ -74,19 +74,24 @@ Gate G1 (10 hand-made wrong-colour cases, 5k corpus): branch
 union contains the target **9/10** vs plain-search Hit@5 6/10.
 
 Wrong-detail test on Muse Spark (`meta/muse-spark-1.3-contributor`), 60
-searches not used for tuning (30 wrong-colour, 30 wrong-object, 5,000 photos).
+searches (30 wrong-colour, 30 wrong-object, 5,000 photos). 20 of them are also in
+the larger sample used to set the sentence-edit blend, and no other setting was tuned on them.
 A simulated user corrects the detail in at most 3 questions, and simple search
 gets the same AI check:
 
 | Correct photo in the list | Simple search | Simple + AI check | Recall + AI check + correction |
 |---|---|---|---|
-| Top 5 | 38/60 | 38/60 | **48/60** (80%) |
-| Top 10 | 40/60 | 47/60 | **52/60** (87%) |
+| Top 5 | 38/60 | 38/60 | **47/60** (78%) |
+| Top 10 | 40/60 | 43/60 | **52/60** (87%) |
 
 Against simple search with the same AI check, Recall gained 10 photos in the top
-5 and lost none. In the 10 searches where the wrong detail pushed the photo out
-of simple search's top 5, Recall returned 7 and simple search with the AI check
-returned 2.
+5 and lost 1, and gained 9 and lost none in the top 10. In the 10 searches where
+the wrong detail pushed the photo out of simple search's top 5, Recall returned 6
+and simple search with the AI check returned 2.
+
+With no correction and no AI check (a separate 100 searches, MetaCLIP only), the
+first ranking puts the photo in the top 5 in 44 of 75 wrong-detail searches, against
+37 for simple search, and in 19 of 25 accurate searches, against 20.
 
 Corpus scale vs quality (100 own-caption queries per corpus,
 `scripts/quality_check.py`). Encoder upgraded B32 → L14 on

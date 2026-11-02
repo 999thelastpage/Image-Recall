@@ -40,7 +40,7 @@
       font-size:14px;cursor:pointer;color:var(--soft)}
   .ex:hover{border-color:var(--accent);color:var(--accent-dark)}
   .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
-  .seg{display:flex;background:#eee;border-radius:10px;padding:3px}
+  .seg{display:flex;flex-wrap:wrap;background:#eee;border-radius:10px;padding:3px}
   .seg button{border:0;background:transparent;padding:8px 14px;border-radius:8px;
               font:inherit;font-size:14px;cursor:pointer;color:var(--soft)}
   .seg button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -127,6 +127,8 @@
   .empty{color:var(--soft);text-align:center;padding:44px 20px;background:var(--card);
          border:1px dashed var(--line);border-radius:var(--radius);margin-top:26px}
   .empty b{color:var(--ink)}
+  .morebtn{display:block;margin:16px auto 0}
+  .morebtn[hidden]{display:none}
   #enhanceRow{display:flex} #enhanceRow[hidden]{display:none}
   #evidenceLine{white-space:pre-wrap;font-size:14px;color:var(--soft);margin-top:10px}
   footer{max-width:1080px;margin:0 auto;padding:0 20px 34px;color:var(--faint);font-size:13px}
@@ -238,10 +240,12 @@
     <div class="col" id="colBase" hidden>
       <div class="colhead"><h3><span class="brandtag">SIMPLE</span> Simple search</h3><p>Believes every word you said, exactly as said.</p></div>
       <div class="grid" id="gridBase"></div>
+      <button class="ghosty morebtn" id="gridBaseMore" hidden></button>
     </div>
     <div class="col" id="colRecall" hidden>
       <div class="colhead"><h3><span class="brandtag">RECALL</span> Recall repair</h3><p>Assumes one detail might be wrong: drops or swaps each in turn, then merges.</p></div>
       <div class="grid" id="gridRecall"></div>
+      <button class="ghosty morebtn" id="gridRecallMore" hidden></button>
     </div>
   </div>
   <div class="empty" id="emptyMsg">
@@ -259,6 +263,7 @@ search go to the hosted model for the double-check.</footer>
 <script>
 const $ = id => document.getElementById(id);
 let mode = 'both', sessionId = null, initialRank = {}, jobTimer = null;
+const SHOWN = 12, PAGE = 10, MORE_RESULTS = 60;
 
 const MODE_HELP = {
   baseline: 'One quick search that believes your description exactly as written.',
@@ -355,17 +360,35 @@ function card(it, rank, opts = {}){
     <div class="matchbar"><i style="width:${pct}%"></i></div>
     <div class="matchlbl">match strength${opts.note ? ' · ' + opts.note : ''}</div></figcaption></figure>`;
 }
+/* Draw the first photos and keep the rest behind "Show more". */
+function paged(el, items, cardFor, step = PAGE, keepOpen = false){
+  el._items = items; el._cardFor = cardFor; el._step = step;
+  el._open = keepOpen && el._open ? el._open : step;
+  drawPage(el);
+}
+function drawPage(el){
+  const items = el._items, open = Math.min(el._open, items.length);
+  el.innerHTML = items.slice(0, open).map((it, i) => el._cardFor(it, i)).join('');
+  const btn = $(el.id + 'More'), left = items.length - open;
+  btn.hidden = left <= 0;
+  btn.textContent = `Show more (${left} more)`;
+  btn.onclick = () => { el._open += el._step; drawPage(el); };
+}
+function clearGrid(el, html = ''){
+  el._items = []; el.innerHTML = html;
+  $(el.id + 'More').hidden = true;
+}
 function renderGrid(el, items, otherIds){
   const topScore = items.length ? items[0].score : 1;
-  el.innerHTML = items.map((it, i) => card(it, i + 1,
-    {topScore, only: otherIds ? !otherIds.has(it.image_id) : false})).join('');
+  paged(el, items, (it, i) => card(it, i + 1,
+    {topScore, only: otherIds ? !otherIds.has(it.image_id) : false}), SHOWN);
 }
 
 /* ---------- search ---------- */
 $('searchBtn').onclick = async () => {
   if (mode === 'session' || mode === 'proof') return startSession(mode === 'proof');
   $('err').textContent = '';
-  const body = {query: $('query').value.trim(), corpus: $('corpus').value, mode, top_k: 12};
+  const body = {query: $('query').value.trim(), corpus: $('corpus').value, mode, top_k: MORE_RESULTS};
   if (!body.query){ $('err').textContent = 'Describe the photo first.'; return; }
   if (!body.corpus){ $('err').textContent = 'Add a photo folder first (below the search box).'; return; }
   $('searchBtn').disabled = true; $('searchBtn').textContent = 'Searching…';
@@ -386,22 +409,22 @@ $('searchBtn').onclick = async () => {
   $('vsBadge').classList.remove('show');
   $('colBase').hidden = !wantBase; $('colRecall').hidden = !wantRecall;
   $('cols').classList.toggle('single', !(wantBase && wantRecall));
-  if (wantBase) $('gridBase').innerHTML = '';
-  if (wantRecall) $('gridRecall').innerHTML =
-    '<p style="color:var(--soft);font-size:14px">Recall is splitting your description and doubting each detail…</p>';
+  if (wantBase) clearGrid($('gridBase'));
+  if (wantRecall) clearGrid($('gridRecall'),
+    '<p style="color:var(--soft);font-size:14px">Recall is splitting your description and doubting each detail…</p>');
   let baseOut = null, recallOut = null;
   const post = m => fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({...body, mode: m})}).then(async r => ({ok: r.ok, out: await r.json()}));
   const renderRecall = () => {
-    const baseIds = baseOut ? new Set(baseOut.baseline.map(x => x.image_id)) : null;
+    const baseIds = baseOut ? new Set(baseOut.baseline.slice(0, SHOWN).map(x => x.image_id)) : null;
     renderGrid($('gridRecall'), recallOut.recall, baseIds);
   };
   const renderCompare = () => {
     if (!baseOut || !recallOut) return;
     $('compareBar').classList.add('show');
     $('vsBadge').classList.add('show');
-    const baseIds = new Set(baseOut.baseline.map(x => x.image_id));
-    const recallIds = new Set(recallOut.recall.map(x => x.image_id));
+    const baseIds = new Set(baseOut.baseline.slice(0, SHOWN).map(x => x.image_id));
+    const recallIds = new Set(recallOut.recall.slice(0, SHOWN).map(x => x.image_id));
     const nBoth = [...recallIds].filter(id => baseIds.has(id)).length;
     const onlyR = recallIds.size - nBoth, onlyB = baseIds.size - nBoth;
     const topSame = baseOut.baseline[0].image_id === recallOut.recall[0].image_id;
@@ -497,11 +520,11 @@ function renderSession(snap){
   $('cols').classList.add('single');
   document.querySelector('#colRecall .colhead p').textContent = 'Re-ranked live: nothing is ever removed, only re-ordered.';
   const topScore = snap.results.length ? snap.results[0].score : 1;
-  $('gridRecall').innerHTML = snap.results.map((it, i) => {
+  paged($('gridRecall'), snap.results, (it, i) => {
     const was = initialRank[it.image_id];
     const move = was == null ? null : was - (i + 1);
     return card(it, i + 1, {topScore, move});
-  }).join('');
+  }, SHOWN, true);
 }
 async function startSession(proof = false){
   proofMode = proof;
@@ -515,6 +538,7 @@ async function startSession(proof = false){
   $('searchBtn').disabled = false; $('searchBtn').textContent = 'Search my photos';
   if (!r.ok){ $('err').textContent = snap.detail || 'Could not start.'; return; }
   sessionId = snap.session_id; initialRank = {};
+  $('gridRecall')._open = 0;
   $('enhanceRow').hidden = true;
   snap.results.forEach((it, i) => initialRank[it.image_id] = i + 1);
   renderSession(snap);
@@ -545,8 +569,8 @@ async function finishSess(){
   $('enhanceRow').hidden = false;
   if (Array.isArray(out.results) && out.results.length){
     const topScore = out.results[0].score || 1;
-    $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-      {topScore, note: out.reranked ? `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10` : undefined})).join('');
+    paged($('gridRecall'), out.results, (it, i) => card(it, i + 1,
+      {topScore, note: out.reranked ? `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10` : undefined}), PAGE);
     if (out.reranked){
       $('resultsTitle').textContent = 'Your final results';
       $('statsLine').textContent = 'Final order after the AI double-check of the top photos.';
@@ -569,8 +593,8 @@ $('rerankBtn').onclick = async () => {
   if (!r.ok){ $('enhanceStat').textContent = out.detail || 'Double-check unavailable right now.'; return; }
   $('enhanceStat').textContent = 'Re-ordered by the AI double-check.';
   const topScore = out.results.length ? out.results[0].score : 1;
-  $('gridRecall').innerHTML = out.results.map((it, i) => card(it, i + 1,
-    {topScore, note: `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10`})).join('');
+  paged($('gridRecall'), out.results, (it, i) => card(it, i + 1,
+    {topScore, note: `AI score ${it.muse_score == null ? '-' : Math.round(it.muse_score * 10)}/10`}), PAGE);
 };
 $('evidenceBtn').onclick = async () => {
   $('enhanceStat').textContent = 'Looking closely at the top 3…';

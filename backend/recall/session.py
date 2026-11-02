@@ -16,7 +16,14 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .clues import COLOUR_WORDS, Clue, Hypothesis, recall_hypotheses
+from .clues import (
+    COLOUR_WORDS,
+    Clue,
+    Hypothesis,
+    near_sentences,
+    recall_hypotheses,
+    without_colours,
+)
 from .config import FINAL_TOP_K, MAX_QUESTIONS, branch_quota
 from .questions import (
     CATEGORY_OPTIONS,
@@ -33,8 +40,26 @@ from .questions import (
     subject_question,
     uncertainty_question,
 )
-from .rank import Candidate, branch_union, calibrated_union, weighted_rerank
+from .rank import Candidate, branch_union, opening_search, weighted_rerank
 from .retrieve import ExactIndex
+
+
+def first_search(index: ExactIndex, encoder, description: str, clues: list[Clue]):
+    """(candidates, weights, hypotheses) for a new description, with one
+    batched encode for every sentence."""
+    hyps = recall_hypotheses(description, clues,
+                             substitution_colours=tuple(COLOURS),
+                             max_substitutions=2)
+    edits = near_sentences(description)
+    plain = without_colours(description)
+    if plain:
+        edits.append(plain)
+    mat = encoder.encode_texts([h.query_text for h in hyps] + edits)
+    queries = list(zip(hyps, mat[: len(hyps)], strict=True))
+    extra = mat[len(hyps):] if edits else None
+    cands, weights = opening_search(index, queries, extra, branch_quota(len(index)))
+    return cands, weights, hyps
+
 
 def _subjectless_score(candidate) -> float:
     """Best score from subject-less evidence only (revised/category/
@@ -134,14 +159,8 @@ class SearchSession:
     # -- setup ----------------------------------------------------
     def start(self) -> None:
         self.sentence = self.description
-        hyps = recall_hypotheses(self.description, self.clues,
-                                 substitution_colours=tuple(COLOURS),
-                                 max_substitutions=2)
-        # One batched encode for all branches, not one call per branch.
-        mat = self.encoder.encode_texts([h.query_text for h in hyps])
-        queries = list(zip(hyps, mat, strict=True))
-        self.candidates, self.weights = calibrated_union(
-            self.index, queries, branch_quota(len(self.index)))
+        self.candidates, self.weights, _ = first_search(
+            self.index, self.encoder, self.description, self.clues)
         self.status = "asking"
         self.pending = self._plan()
 
@@ -638,9 +657,9 @@ class SearchSession:
         return s
 
     # -- output -----------------------------------------------------
-    def finish(self) -> dict:
+    def finish(self, top_k: int = FINAL_TOP_K) -> dict:
         self.status = "done"
-        top = self.candidates[:FINAL_TOP_K]
+        top = self.candidates[:top_k]
         dropped_texts = [self.clues[i].text for i in sorted(self.dropped)]
         replaced = [
             f"'{self.clues[a.clue_index].text}' → '{a.value}'"

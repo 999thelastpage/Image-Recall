@@ -38,6 +38,72 @@ ACTIVITY_WORDS = {"riding", "running", "sitting", "standing", "eating",
                   "jumping", "swimming", "driving", "cooking", "reading"}
 
 
+# Things people mix up. Each sentence edit swaps one word for a word of
+# the same kind ("a bus on the grass") or the kind itself ("a vehicle on
+# the grass"), so it still says what the photo is about.
+WORD_GROUPS = {
+    "vehicle": ["car", "bus", "truck", "van", "motorcycle", "bicycle", "train",
+                "boat", "airplane"],
+    "animal": ["dog", "cat", "horse", "cow", "sheep", "bird", "bear", "elephant",
+               "zebra", "giraffe"],
+    "furniture": ["chair", "couch", "bench", "table", "bed"],
+    "person": ["man", "woman", "boy", "girl", "child"],
+}
+_PLURALS = {"bus": "buses", "man": "men", "woman": "women", "child": "children",
+            "sheep": "sheep", "person": "people", "furniture": "furniture"}
+_SAME_WORD = {"bike": "bicycle", "plane": "airplane", "sofa": "couch", "kid": "child"}
+
+
+def plural(word: str) -> str:
+    return _PLURALS.get(word, word + "s")
+
+
+_WORD_INFO: dict[str, tuple[str, str, bool]] = {}
+for _group, _words in WORD_GROUPS.items():
+    for _w in _words:
+        _WORD_INFO[_w] = (_group, _w, False)
+        _WORD_INFO[plural(_w)] = (_group, _w, True)
+for _other, _w in _SAME_WORD.items():
+    _WORD_INFO[_other] = (_WORD_INFO[_w][0], _w, False)
+    _WORD_INFO[plural(_other)] = (_WORD_INFO[_w][0], _w, True)
+
+
+def fix_articles(text: str) -> str:
+    def repl(m: re.Match) -> str:
+        article = "an" if m.group(2)[0].lower() in "aeiou" else "a"
+        if m.group(1)[0].isupper():
+            article = article.capitalize()
+        return f"{article} {m.group(2)}"
+
+    return re.sub(r"\b(an?)\s+([A-Za-z]+)", repl, text, flags=re.I)
+
+
+def near_sentences(text: str, max_nouns: int = 2) -> list[str]:
+    """The sentence with its first nouns swapped for similar things."""
+    out: list[str] = []
+    nouns = 0
+    for m in re.finditer(r"[A-Za-z]+", text):
+        info = _WORD_INFO.get(m.group(0).lower())
+        if info is None:
+            continue
+        group, word, many = info
+        swaps = [group] + [w for w in WORD_GROUPS[group] if w != word]
+        for swap in swaps:
+            new = plural(swap) if many else swap
+            out.append(fix_articles(text[: m.start()] + new + text[m.end() :]))
+        nouns += 1
+        if nouns >= max_nouns:
+            break
+    return list(dict.fromkeys(out))
+
+
+def without_colours(text: str) -> str | None:
+    """The sentence with no colour words, or None when it has none."""
+    pat = r"\b(?:" + "|".join(COLOUR_WORDS) + r")\s+"
+    out = fix_articles(re.sub(pat, "", text, flags=re.I))
+    return out if out != text else None
+
+
 @dataclass(frozen=True)
 class Clue:
     text: str

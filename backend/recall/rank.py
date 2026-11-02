@@ -18,6 +18,7 @@ from .retrieve import ExactIndex
 
 
 BRANCH_LEAD = 0.9  # clue branches against the user's own sentence
+CLUE_BRANCH_WEIGHT = 0.6  # until the user doubts a clue, its branch stays quiet
 
 
 @dataclass
@@ -87,6 +88,52 @@ def calibrated_union(
         c.score = max(weights.get(b, 1.0) * s for b, s in c.branch_scores.items())
     union.sort(key=lambda c: (-c.score, c.image_id))
     return union, weights
+
+
+EDIT_STRENGTH = 0.75  # measured: 0.5 to 1.0 gives similar results
+OPENING = "opening"
+
+
+def opening_scores(index: ExactIndex, raw: np.ndarray,
+                   edits: np.ndarray | None) -> np.ndarray:
+    """One score per photo. The user's own sentence always counts, and the
+    best whole-sentence edit adds to it. A blend, not the best of all: an edit
+    can lift a near match without pushing out what the user actually asked for."""
+    def z(q: np.ndarray) -> np.ndarray:
+        s = index.embeddings @ np.asarray(q, dtype=np.float32).T
+        return (s - s.mean(axis=0)) / (s.std(axis=0) + 1e-9)
+
+    base = z(raw.reshape(1, -1)).ravel()
+    best = base if edits is None or not len(edits) else np.maximum(base, z(edits).max(axis=1))
+    return (base + EDIT_STRENGTH * best) / (1 + EDIT_STRENGTH)
+
+
+def opening_search(
+    index: ExactIndex,
+    branch_queries: list[tuple[Hypothesis, np.ndarray]],
+    edits: np.ndarray | None,
+    per_branch_k: int,
+) -> tuple[list[Candidate], dict[str, float]]:
+    """The first ranking. Clue branches stay available for corrections, and
+    the order comes from the sentence and its edits. Bare fragments such as
+    'grass' do not set it: they surface photos of grass, not the user's photo."""
+    union, weights = calibrated_union(index, branch_queries, per_branch_k)
+    raw = next(q for h, q in branch_queries if h.label == RAW_LABEL)
+    scores = opening_scores(index, np.asarray(raw), edits)
+    pos = {iid: r for r, iid in enumerate(index.image_ids)}
+    by_id = {c.image_id: c for c in union}
+    for r in np.argsort(-scores)[:per_branch_k]:
+        iid = index.image_ids[int(r)]
+        if iid not in by_id:
+            by_id[iid] = Candidate(iid, float(scores[r]))
+    for c in by_id.values():
+        c.score = float(scores[pos[c.image_id]])
+        c.branch_scores[OPENING] = c.score
+        if OPENING not in c.branches:
+            c.branches.append(OPENING)
+    weights = {b: min(w, CLUE_BRANCH_WEIGHT) for b, w in weights.items()}
+    weights[OPENING] = 1.0
+    return sorted(by_id.values(), key=lambda c: (-c.score, c.image_id)), weights
 
 
 def weighted_rerank(

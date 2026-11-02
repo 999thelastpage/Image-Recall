@@ -68,3 +68,22 @@ def test_hypotheses_single_clue_has_no_drops():
 def test_fallback_splits_on_commas_too():
     clues = parse_fallback("a red jacket, at the beach, and two dogs")
     assert [c.text for c in clues] == ["a red jacket", "at the beach", "two dogs"]
+
+
+def test_near_sentences_keep_the_whole_sentence():
+    from backend.recall.clues import near_sentences
+
+    out = near_sentences("a car on the grass")
+    assert "a bus on the grass" in out
+    assert "a vehicle on the grass" in out
+    assert "an airplane on the grass" in out
+    assert "a car on the grass" not in out
+    assert near_sentences("two dogs in snow")[0] == "two animals in snow"
+    assert near_sentences("a sunset over hills") == []
+
+
+def test_without_colours():
+    from backend.recall.clues import without_colours
+
+    assert without_colours("a purple bus") == "a bus"
+    assert without_colours("a bus") is None

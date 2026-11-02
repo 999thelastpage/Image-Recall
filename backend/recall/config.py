@@ -17,6 +17,7 @@ def branch_quota(corpus_size: int) -> int:
         return 150
     return 250
 FINAL_TOP_K = 10
+MORE_RESULTS = 60  # photos sent to the page for "show more"
 RRF_K = 60  # reciprocal-rank fusion constant (rank-based, scale-free)
 EMBEDDING_DIM = 768  # facebook/metaclip-l14-fullcc2.5b output size
 

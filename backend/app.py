@@ -28,14 +28,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.recall.clues import Clue, dedupe_clues, parse_fallback, recall_hypotheses
+from backend.recall.clues import Clue, dedupe_clues, parse_fallback
 from backend.recall.embeddings import MetaClipEncoder
 from backend.recall.manifest import build_manifest, read_manifest, write_manifest
 from backend.recall.providers import MuseClient, load_dotenv, rerank_client
-from backend.recall.config import ENCODER_MODEL, FINAL_TOP_K, branch_quota
-from backend.recall.questions import COLOURS
-from backend.recall.rank import calibrated_union
+from backend.recall.config import ENCODER_MODEL, FINAL_TOP_K, MORE_RESULTS
 from backend.recall.retrieve import ExactIndex
+from backend.recall.session import SearchSession, first_search
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(str(ROOT / ".env"))
@@ -361,14 +360,8 @@ def search(req: SearchRequest) -> dict:
                                   for c in chips])
         timings["parse_ms"] = round((time.time() - t0) * 1000, 1)
         out["parse_cached"] = cached
-        hyps = recall_hypotheses(req.query, clues,
-                                 substitution_colours=tuple(COLOURS),
-                                 max_substitutions=2)
         t0 = time.time()
-        # Batched encode + batched union: one matmul for all branches.
-        mat = enc.encode_texts([h.query_text for h in hyps]) if hyps else []
-        queries = list(zip(hyps, mat, strict=True))
-        union, _weights = calibrated_union(index, queries, branch_quota(len(index)))
+        union, _weights, hyps = first_search(index, enc, req.query, clues)
         timings["recall_search_ms"] = round((time.time() - t0) * 1000, 1)
         out["clues"] = [c.text for c in clues]
         out["parse_source"] = parse_source
@@ -453,8 +446,6 @@ def _get_rec(session_id: str) -> dict:
     if path.exists():
         import json
 
-        from backend.recall.session import SearchSession
-
         payload = json.loads(path.read_text())
         index = get_index(payload["corpus"])
         s = SearchSession.from_dict(index, get_encoder(), payload["session"])
@@ -491,13 +482,11 @@ def create_session(req: SessionRequest) -> dict:
                               for c in chips])
     if not clues:
         raise HTTPException(400, "could not parse any clues from that description")
-    from backend.recall.session import SearchSession
-
     s = SearchSession(index, enc, req.query, clues)
     s.start()
     _sessions[s.session_id] = {"session": s, "corpus": req.corpus, "index": index}
     _save_session(_sessions[s.session_id])
-    snap = _enrich(req.corpus, index, s.snapshot())
+    snap = _enrich(req.corpus, index, s.snapshot(MORE_RESULTS))
     snap["parse_source"] = source
     return snap
 
@@ -505,7 +494,7 @@ def create_session(req: SessionRequest) -> dict:
 @app.get("/api/session/{session_id}")
 def get_session(session_id: str) -> dict:
     rec = _get_rec(session_id)
-    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
+    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot(MORE_RESULTS))
 
 
 class AnswerRequest(BaseModel):
@@ -520,7 +509,7 @@ def answer_session(session_id: str, req: AnswerRequest) -> dict:
     except RuntimeError as e:
         raise HTTPException(400, str(e)) from e
     _save_session(rec)
-    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot())
+    return _enrich(rec["corpus"], rec["index"], rec["session"].snapshot(MORE_RESULTS))
 
 
 def _doubt_aware(s) -> str:
@@ -567,7 +556,7 @@ def _doubt_aware(s) -> str:
 def finish_session(session_id: str) -> dict:
     rec = _get_rec(session_id)
     s = rec["session"]
-    out = s.finish()
+    out = s.finish(MORE_RESULTS)
     _save_session(rec)
     entries = {e.image_id: e for e in rec["index"]._entries}  # type: ignore[attr-defined]
     # Automatic doubt-aware rerank of the top 40: measured rescuing
@@ -582,7 +571,7 @@ def finish_session(session_id: str) -> dict:
             {"image_id": r.image_id, "score": round(r.final, 4),
              "muse_score": (None if r.muse is None else round(r.muse, 2)),
              "branches": r.branches}
-            for r in ranked[:FINAL_TOP_K]
+            for r in ranked[:MORE_RESULTS]
         ]
         out["reranked"] = True
     except Exception as e:  # noqa: BLE001: surface, never silent
@@ -615,7 +604,7 @@ def rerank_session(session_id: str) -> dict:
              "branches": r.branches,
              "url": f"/api/image/{rec['corpus']}/{r.image_id}",
              "file": Path(entries[r.image_id].path).name if r.image_id in entries else ""}
-            for r in out[:12]
+            for r in out[:MORE_RESULTS]
         ],
     }
 

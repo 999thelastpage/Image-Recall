@@ -667,7 +667,8 @@ def test_users_own_sentence_is_searched_and_leads():
     raw_top = s.candidates[0]
     assert "raw" in raw_top.branches
     assert "raw" not in s.weights
-    assert all(w < 1.0 for w in s.weights.values())
+    assert s.weights["opening"] == 1.0  # the sentence and its edits set the order
+    assert all(w < 1.0 for b, w in s.weights.items() if b != "opening")
 
 
 def test_colour_correction_edits_the_whole_sentence():

@@ -202,11 +202,11 @@
   <h2>7. Numbers we measured</h2>
   <p>These numbers come from tests that we ran on this computer.</p>
   <div class="card">
-    <h3 style="margin-top:0">Wrong detail test: correct one detail, and Recall finds the photo in 80% of cases</h3>
+    <h3 style="margin-top:0">Wrong detail test: correct one detail, and Recall finds the photo in 78% of cases</h3>
     <div class="stats">
-      <div class="stat win"><span class="label">Correct photo in the top 5</span><span class="value">80%</span><span class="sub">Simple search: 63%</span></div>
-      <div class="stat"><span class="label">Photos gained against the same AI check</span><span class="value">+10</span><span class="sub">0 photos lost, top 5</span></div>
-      <div class="stat"><span class="label">Lost photos returned to the top 5</span><span class="value">3.5×</span><span class="sub">7 photos against 2</span></div>
+      <div class="stat win"><span class="label">Correct photo in the top 5</span><span class="value">78%</span><span class="sub">Simple search: 63%</span></div>
+      <div class="stat"><span class="label">Photos gained against the same AI check</span><span class="value">+10</span><span class="sub">1 photo lost, top 5</span></div>
+      <div class="stat"><span class="label">Lost photos returned to the top 5</span><span class="value">3×</span><span class="sub">6 photos against 2</span></div>
     </div>
     <p>Each search starts with one wrong colour or one wrong object. The right photo
     is 1 of 5,000 photos. The user then corrects the detail in Recall.</p>
@@ -215,10 +215,10 @@
         <caption>Number of searches with the correct photo in the list. 60 searches, 5,000 photos.</caption>
         <thead><tr><th>Test</th><th class="n">Simple search</th><th class="n">Simple search + AI check</th><th class="n">Recall + AI check + correction</th></tr></thead>
         <tbody>
-          <tr><td>All searches, top 5</td><td class="n">38</td><td class="n">38</td><td class="n"><b>48</b></td></tr>
-          <tr><td>All searches, top 10</td><td class="n">40</td><td class="n">47</td><td class="n"><b>52</b></td></tr>
+          <tr><td>All searches, top 5</td><td class="n">38</td><td class="n">38</td><td class="n"><b>47</b></td></tr>
+          <tr><td>All searches, top 10</td><td class="n">40</td><td class="n">43</td><td class="n"><b>52</b></td></tr>
           <tr><td>Wrong colour, top 5 (30 searches)</td><td class="n">19</td><td class="n">17</td><td class="n"><b>21</b></td></tr>
-          <tr><td>Wrong object, top 5 (30 searches)</td><td class="n">19</td><td class="n">21</td><td class="n"><b>27</b></td></tr>
+          <tr><td>Wrong object, top 5 (30 searches)</td><td class="n">19</td><td class="n">21</td><td class="n"><b>26</b></td></tr>
         </tbody>
       </table>
     </div>
@@ -226,9 +226,9 @@
     pushed the photo out of the top 5 of simple search.</p>
     <p><b>How we made this test:</b> a computer program made each wrong description and
     gave each correction. The program knows the correct detail. The objects are on the
-    Recall answer list. The AI check is Muse Spark. It gives both searches the same check. “New searches” are searches that we did not use to tune Recall.</p>
+    Recall answer list. The AI check is Muse Spark. It gives both searches the same check. We set one Recall setting with a larger group of searches. 20 of these 60 searches are in that group.</p>
     <p><b>One example:</b> a user types “a car parked in grass”, and the photo shows a bus.
-    Simple search puts the photo at position 14. One correction in Recall moves it to position 3.</p>
+    Simple search puts the photo at position 14. One correction in Recall moves it to the top 3.</p>
     <p><b>Speed:</b> one search over 82,783 photos takes about 0.07 seconds. All Recall searches together take under 0.1 seconds. The Muse word step takes some seconds, and Recall keeps its answer: the same question a second time takes about 0.06 seconds in total.</p>
     <p style="margin-bottom:0"><b>Photo sets:</b> 5,000 photos in the public demo. 82,783 photos in the big test set on this computer. Same engine, same numbers format (768 numbers per photo).</p>
   </div>
@@ -256,7 +256,7 @@
   <h2>9. Where Recall is strong, and how it grows</h2>
   <p><b>Proven today, ready to grow:</b> we built this prototype for one wrong
   detail, and our tests show that it works: when the user corrects the detail, the
-  correct photo is in the top 5 in 48 of 60 searches, against 38 of 60 for simple
+  correct photo is in the top 5 in 47 of 60 searches, against 38 of 60 for simple
   search. The next step is more engineering, so that
   Recall can also repair a memory with two or more wrong details.</p>
   <p><b>Better models, better results:</b> Recall is built so that its models
