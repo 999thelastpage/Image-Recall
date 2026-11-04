@@ -133,6 +133,17 @@ only by offline scoring scripts), hosted providers off without
 credentials, generated images always labelled. Failures are
 reported with their layer, not hidden.
 
+## What's next: beyond photos
+
+Photo search works today. The same idea works wherever people search from an
+imperfect memory. These uses are planned, not built: each needs its own search
+model and proof check.
+
+- **Videos and long recordings:** find the moment, not just the file.
+- **Store and security cameras:** search hours of footage from a witness's rough description.
+- **Unusual events:** describe what looked out of place and find the closest footage.
+- **Media, archives and documents:** the right shot, record or file from a half-remembered brief.
+
 ## Status & next
 
 Done: G0 (API + encoder gates), Day 1 engine (Gate G1), encoder
