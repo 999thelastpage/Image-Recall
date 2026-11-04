@@ -15,6 +15,15 @@ one command (below) — that local console is what the demo video
 will show. How it works, in simple words: see the
 [product details page](https://thelastpage--recall-console-web.us-east.modal.run/details.html).
 
+## Built with Meta models
+
+| Meta model | What it does in Recall |
+|---|---|
+| **Muse Spark 1.3** | Reads a free description into clues, checks the top 40 photos against it at finish, and reads evidence from the top photos |
+| **MetaCLIP-L14** (open weights) | Embeds every photo and every search for exact cosine retrieval |
+| **SAM 3.1** (Meta Model API) | Outlines the object the user described in the top photos, so colour and count are read inside the object, not the whole frame. Runs when a Meta API key is set; otherwise Muse Spark vision reads the same facts |
+| **Muse Wonder** | Planned the build and wrote most of the first version of the code |
+
 ## Try it now (local console)
 
 ```bash

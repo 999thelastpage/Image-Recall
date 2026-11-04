@@ -2,7 +2,7 @@ from backend.recall.rank import Candidate
 from backend.recall.rerank import MuseReranker, doubt_aware_description
 
 
-class FakeClaude:
+class FakeMuse:
     """Scores by filename so tests are deterministic and offline."""
 
     def __init__(self, scores: dict[str, float]) -> None:
@@ -25,7 +25,7 @@ def _cands() -> list[Candidate]:
 
 def test_rerank_promotes_muse_favourite():
     paths = {c.image_id: f"/x/{c.image_id}.jpg" for c in _cands()}
-    r = MuseReranker(FakeClaude({"img-000000.jpg": 1, "img-000001.jpg": 10,
+    r = MuseReranker(FakeMuse({"img-000000.jpg": 1, "img-000001.jpg": 10,
                                  "img-000002.jpg": 2}))
     out = r.rerank(_cands(), paths, "a photo", top_n=3, weight=0.45)
     assert out[0].image_id == "img-000001"
@@ -67,7 +67,7 @@ def test_demotion_guard_protects_union_top5():
                        {"original": 0.90 - i * 0.01}) for i in range(15)]
     scores = {f"img-{i:06d}.jpg": (3 if i == 0 else 10) for i in range(15)}
     paths = {c.image_id: f"/x/{c.image_id}.jpg" for c in cands}
-    out = MuseReranker(FakeClaude(scores)).rerank(
+    out = MuseReranker(FakeMuse(scores)).rerank(
         cands, paths, "a photo", top_n=15, weight=0.65)
     pos = [o.image_id for o in out].index("img-000000")
     assert pos < 10  # middling Muse score cannot bury a union top-5
@@ -77,7 +77,7 @@ def test_colour_match_soft_bonus():
     cands = [Candidate(c.image_id, 0.25, c.branches, {"original": 0.25})
              for c in _cands()]
     paths = {c.image_id: f"/x/{c.image_id}.jpg" for c in cands}
-    r = MuseReranker(FakeClaude({"img-000000.jpg": 5, "img-000001.jpg": 5,
+    r = MuseReranker(FakeMuse({"img-000000.jpg": 5, "img-000001.jpg": 5,
                                  "img-000002.jpg": 5}))
     out = r.rerank(cands, paths, "a photo", top_n=3, weight=0.45,
                    colour_matches={"img-000002": True,
