@@ -159,3 +159,11 @@ go/no-go discussion. Known weaknesses, honestly: wrong-object
 repair is at parity (coverage-bound), union recall at 83k is
 unmeasured, MetaCLIP weights are CC-BY-NC (PE-Core is the
 Apache-2.0 commercial candidate).
+
+## Data credit
+
+The demo and tests use the [COCO dataset](https://cocodataset.org) (val2017 and
+train2014 photos and captions): Lin et al., "Microsoft COCO: Common Objects in
+Context", ECCV 2014 ([arXiv:1405.0312](https://arxiv.org/abs/1405.0312)). The COCO
+annotations are licensed CC BY 4.0. The images come from Flickr and stay under their
+owners' licenses, as set out in the [COCO terms of use](https://cocodataset.org/#termsofuse).

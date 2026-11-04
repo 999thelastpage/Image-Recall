@@ -622,7 +622,9 @@ loadCorpora();
 fetch('/api/meta').then(r => r.json()).then(m => {
   if (!m.demo) return;
   document.querySelector('.addphotos').style.display = 'none';
-  $('footNote').textContent = 'Hosted demo: 5,000 photos (COCO val2017). ' +
+  $('footNote').innerHTML = 'Hosted demo: 5,000 photos from the ' +
+    '<a href="https://cocodataset.org" target="_blank" rel="noopener">COCO dataset</a> (val2017; ' +
+    'images © their Flickr owners, <a href="https://cocodataset.org/#termsofuse" target="_blank" rel="noopener">terms</a>). ' +
     'AI reads your description and double-checks the top photos. ' +
     'The AI provider may use the text you type and these demo photos to train models. ' +
     'Adding your own folders is disabled here.';
